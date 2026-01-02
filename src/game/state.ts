@@ -1,11 +1,11 @@
 // src/game/state.ts
 import { CLICK_BASE_DAMAGE, CLICK_DAMAGE_TIERS, PRICE_MULT } from "./config";
-import { baseHp, targetLabel, targetList, type TargetId } from "./data/targets";
-import { treasures, treasureIndex, type Treasure } from "./data/treasures";
+import { baseHp, targetList, type TargetId } from "./data/targets";
 import { workerDef, workerList, type WorkerId } from "./data/workers";
+import { treasures, treasureIndex, type Treasure } from "./data/treasures";
 import { upgradeDef, isUnlocked, type UpgradeId } from "./upgrades";
 
-export { targetLabel, targetList, treasures, workerList, workerDef, treasureIndex };
+export { targetList, workerList, workerDef, treasureIndex };
 export type { TargetId, WorkerId, Treasure, UpgradeId };
 
 // 数値は同じでも意味が異なるため、同一の定数にはしない。
@@ -26,15 +26,8 @@ export type GameState = {
   workerUnits: Record<WorkerId, number[]>;
   animStartedAt: number | null;
 
-  lastTreasure?: { id: string; name: string; desc: string; gold: number; isNew: boolean; at: number };
+  lastTreasure?: { name: string; gold: number };
   lastClickDamage?: number;
-
-  // 次のクリックの事前ロール（HPバーの黄色プレビュー用）
-  nextClickBase: number;
-
-  // ダメージ演出用（手動/人手）
-  lastManualHit?: { dmg: number; at: number; mult: number };
-  lastWorkerHit?: { dmg: number; at: number };
 
   discovered: Record<string, true>;
   discoveredOrder: string[];
@@ -59,7 +52,6 @@ export function newGame(): GameState {
     targets: { rock: newTarget("rock"), house: newTarget("house"), mine: newTarget("mine") },
     workerUnits: { scavenger: [], caver: [], excavator: [] },
     animStartedAt: null,
-    nextClickBase: rollClickDamageBase(),
     discovered: {},
     discoveredOrder: [],
     upgrades: {} as Record<UpgradeId, true>,
@@ -78,37 +70,15 @@ export function selectTarget(game: GameState, id: TargetId): GameState {
 function applyDamageToSelected(game: GameState, dmg: number, now: number): GameState {
   const target = game.targets[game.selected];
   if (target.state !== "normal" || target.hp <= 0 || dmg <= 0) return game;
-
   const nextHp = Math.max(0, target.hp - dmg);
   const isAnimating = nextHp === 0;
-
-  const nextState: GameState = {
+  return {
     ...game,
     animStartedAt: isAnimating ? now : game.animStartedAt,
     targets: {
       ...game.targets,
       [target.id]: { ...target, hp: nextHp, state: isAnimating ? "animating" : "normal" },
     },
-  };
-
-  // お宝獲得のタイミングを「HPが0になった瞬間」に合わせる。
-  if (!isAnimating) return nextState;
-
-  const treasure = pickTreasure(target.id);
-  const gold = rollGold(treasure.base);
-
-  const isNew = nextState.discovered[treasure.id] !== true;
-  const discovered: Record<string, true> = isNew
-    ? { ...nextState.discovered, [treasure.id]: true as const }
-    : nextState.discovered;
-  const discoveredOrder = isNew ? [...nextState.discoveredOrder, treasure.id] : nextState.discoveredOrder;
-
-  return {
-    ...nextState,
-    money: nextState.money + gold,
-    lastTreasure: { id: treasure.id, name: treasure.name, desc: treasure.desc, gold, isNew, at: now },
-    discovered,
-    discoveredOrder,
   };
 }
 
@@ -125,28 +95,17 @@ function rollClickDamageBase(): number {
   return Math.floor(Math.random() * (lastTier.maxMul + 1)) * CLICK_BASE_DAMAGE;
 }
 
-function clickBonus(game: GameState): number {
-  let bonus = 0;
-  for (const upgradeId of Object.keys(game.upgrades) as UpgradeId[]) bonus += upgradeDef[upgradeId].add;
-  return bonus;
+function clickMult(game: GameState): number {
+  let mult = 1;
+  for (const upgradeId of Object.keys(game.upgrades) as UpgradeId[]) mult *= upgradeDef[upgradeId].mult;
+  return mult;
 }
 
 export function clickDig(game: GameState, now: number): GameState {
-  const base = game.nextClickBase;
-  const dmg = Math.max(0, base + clickBonus(game));
-  const nextClickBase = rollClickDamageBase();
-
-  // 0ダメージも演出として記録する（HPは減らさない）
-  if (dmg <= 0)
-    return { ...game, nextClickBase, lastClickDamage: 0, lastManualHit: { dmg: 0, at: now, mult: 0 } };
-
+  const base = rollClickDamageBase();
+  const dmg = base * clickMult(game);
   const nextState = applyDamageToSelected(game, dmg, now);
-  return {
-    ...nextState,
-    nextClickBase,
-    lastClickDamage: dmg,
-    lastManualHit: { dmg, at: now, mult: dmg / CLICK_BASE_DAMAGE },
-  };
+  return { ...nextState, lastClickDamage: dmg };
 }
 
 export function workerCount(game: GameState, id: WorkerId): number {
@@ -193,11 +152,7 @@ export function tickWorkers(game: GameState, now: number): GameState {
     if (changed) {
       nextState = { ...nextState, workerUnits: { ...nextState.workerUnits, [workerId]: nextUnits } };
     }
-    if (typeDamage > 0) {
-      const afterDamage = applyDamageToSelected(nextState, typeDamage, now);
-      if (afterDamage !== nextState) nextState = { ...afterDamage, lastWorkerHit: { dmg: typeDamage, at: now } };
-      else nextState = afterDamage;
-    }
+    if (typeDamage > 0) nextState = applyDamageToSelected(nextState, typeDamage, now);
     if (isAnimatingSelected(nextState)) break;
   }
 
@@ -227,12 +182,27 @@ export function finishAnimation(game: GameState, id: TargetId, now: number): Gam
   const target = game.targets[id];
   if (target.state !== "animating") return game;
 
+  const treasure = pickTreasure(id);
+  const gold = rollGold(treasure.base);
+
   const paused = game.animStartedAt === null ? 0 : Math.max(0, now - game.animStartedAt);
   const restored = shiftAllUnits({ ...game, animStartedAt: null }, paused);
 
+  const isNew = restored.discovered[treasure.id] !== true;
+  const discovered: Record<string, true> = isNew
+    ? { ...restored.discovered, [treasure.id]: true as const }
+    : restored.discovered;
+  const discoveredOrder = isNew
+    ? [...restored.discoveredOrder, treasure.id]
+    : restored.discoveredOrder;
+
   return {
     ...restored,
+    money: restored.money + gold,
+    lastTreasure: { name: treasure.name, gold },
     targets: { ...restored.targets, [id]: newTarget(id) },
+    discovered,
+    discoveredOrder,
   };
 }
 

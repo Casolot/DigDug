@@ -1,18 +1,10 @@
-export const upgradeList = ["glove", "pickaxe"] as const;
+export const upgradeList = ["click_x2"] as const;
 export type UpgradeId = typeof upgradeList[number];
 
-export const upgradeDef: Record<
-  UpgradeId,
-  {
-    name: string;
-    desc: string;
-    unlockDex: number;
-    price: number;
-    add: number;
-  }
-> = {
-  glove: { name: "強化手袋", desc: "クリックダメージを+1します。", unlockDex: 2, price: 50, add: 1 },
-  pickaxe: { name: "強化つるはし", desc: "クリックダメージを+2します。", unlockDex: 6, price: 180, add: 2 },
+export const upgradeDef: Record<UpgradeId, {
+  name: string; desc: string; unlockDex: number; price: number; mult: number;
+}> = {
+  click_x2: { name: "強化手袋", desc: "クリックダメージを2倍にします。", unlockDex: 2, price: 50, mult: 2 },
 };
 
 export function isUnlocked(dexCount: number, id: UpgradeId): boolean {
