@@ -137,6 +137,21 @@ button:focus-visible {
   }
 }
 
+.digButton {
+  width: 140px;
+  height: 140px;
+  padding: 0;
+  margin-inline: auto;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+}
+
+.digButton__emoji {
+  font-size: 72px;
+  line-height: 1;
+}
+
 .digButton--shake {
   animation: digButtonShake 180ms ease-in-out;
 }

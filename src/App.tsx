@@ -224,13 +224,24 @@ export default function App() {
         ref={digButtonRef}
         className={digShakeNonce > 0 ? "digButton digButton--shake" : "digButton"}
         disabled={animating}
+        aria-label={animating ? "演出中" : "掘る"}
         onClick={() => {
           setDigShakeNonce((n) => n + 1);
           setGame((prevGame) => clickDig(prevGame, Date.now()));
         }}
-        style={{ marginTop: 12, padding: 16, width: 260 }}
+        style={{ marginTop: 12 }}
       >
-        {animating ? `演出中（${ANIMATION_MS / 1000}s）` : "掘る（クリック）"}
+        {animating ? (
+          <CircleTimer
+            progress={game.animStartedAt ? (now - game.animStartedAt) / ANIMATION_MS : 0}
+            label="演出中"
+            size={96}
+          />
+        ) : (
+          <span className="digButton__emoji" aria-hidden="true">
+            {game.selected === "rock" ? "🪨" : game.selected === "house" ? "🏠" : "⛏️"}
+          </span>
+        )}
       </button>
 
       {damagePopups.map((p) => (
