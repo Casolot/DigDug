@@ -20,94 +20,97 @@ import { upgradeDef, upgradeList, isUnlocked } from "./game/upgrades";
 import { CircleTimer } from "./components/CircleTimer";
 
 export default function App() {
-  const [g, setG] = useState(() => newGame());
+  const [game, setGame] = useState(() => newGame());
   const [now, setNow] = useState(() => Date.now());
   const [dexOpen, setDexOpen] = useState(false);
 
-  const t = g.targets[g.selected];
-  const anim = isAnimatingSelected(g);
+  const selectedTarget = game.targets[game.selected];
+  const animating = isAnimatingSelected(game);
 
   useEffect(() => {
-    const h = setInterval(() => {
-      const n = Date.now();
-      setNow(n);
-      setG((x) => tickWorkers(x, n));
+    const intervalId = setInterval(() => {
+      const nowMs = Date.now();
+      setNow(nowMs);
+      setGame((prevGame) => tickWorkers(prevGame, nowMs));
     }, WORKER_TICK_MS);
-    return () => clearInterval(h);
+    return () => clearInterval(intervalId);
   }, []);
 
   useEffect(() => {
-    if (!anim) return;
-    const id = g.selected;
-    const h = setTimeout(() => setG((x) => finishAnimation(x, id, Date.now())), ANIMATION_MS);
-    return () => clearTimeout(h);
-  }, [anim, g.selected]);
+    if (!animating) return;
+    const targetId = game.selected;
+    const timeoutId = setTimeout(
+      () => setGame((prevGame) => finishAnimation(prevGame, targetId, Date.now())),
+      ANIMATION_MS,
+    );
+    return () => clearTimeout(timeoutId);
+  }, [animating, game.selected]);
 
   const unitRows = useMemo(() => {
     const rows: { id: (typeof workerList)[number]; idx: number; nextAt: number }[] = [];
-    workerList.forEach((id) => {
-      g.workerUnits[id].forEach((nextAt, idx) => rows.push({ id, idx, nextAt }));
+    workerList.forEach((workerId) => {
+      game.workerUnits[workerId].forEach((nextAt, idx) => rows.push({ id: workerId, idx, nextAt }));
     });
     return rows;
-  }, [g.workerUnits]);
+  }, [game.workerUnits]);
 
   return (
     <div style={{ padding: 16, fontFamily: "system-ui" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <div>所持金: {g.money}G</div>
+        <div>所持金: {game.money}G</div>
         <button onClick={() => setDexOpen(true)}>図鑑</button>
       </div>
 
-      {g.lastClickDamage != null && (
-        <div style={{ marginTop: 6 }}>クリックダメージ: {g.lastClickDamage}</div>
+      {game.lastClickDamage != null && (
+        <div style={{ marginTop: 6 }}>クリックダメージ: {game.lastClickDamage}</div>
       )}
 
-      {g.lastTreasure && (
+      {game.lastTreasure && (
         <div style={{ marginTop: 6 }}>
-          入手: {g.lastTreasure.name} +{g.lastTreasure.gold}G
+          入手: {game.lastTreasure.name} +{game.lastTreasure.gold}G
         </div>
       )}
 
       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-        {targetList.map((id) => (
+        {targetList.map((targetId) => (
           <button
-            key={id}
-            disabled={anim}
-            onClick={() => setG((x) => selectTarget(x, id))}
-            style={{ fontWeight: g.selected === id ? "bold" : "normal" }}
+            key={targetId}
+            disabled={animating}
+            onClick={() => setGame((prevGame) => selectTarget(prevGame, targetId))}
+            style={{ fontWeight: game.selected === targetId ? "bold" : "normal" }}
           >
-            {id}
+            {targetId}
           </button>
         ))}
       </div>
 
       <div style={{ marginTop: 12 }}>
-        HP: {t.hp}/{t.maxHp} ({t.state})
+        HP: {selectedTarget.hp}/{selectedTarget.maxHp} ({selectedTarget.state})
       </div>
 
       <button
-        disabled={anim}
-        onClick={() => setG((x) => clickDig(x, Date.now()))}
+        disabled={animating}
+        onClick={() => setGame((prevGame) => clickDig(prevGame, Date.now()))}
         style={{ marginTop: 12, padding: 16, width: 260 }}
       >
-        {anim ? `演出中（${ANIMATION_MS / 1000}s）` : "掘る（クリック）"}
+        {animating ? `演出中（${ANIMATION_MS / 1000}s）` : "掘る（クリック）"}
       </button>
 
       <div style={{ marginTop: 16 }}>
-        <div>強化（図鑑 {g.discoveredOrder.length} 件）</div>
-        {upgradeList.map((id) => {
-          const u = upgradeDef[id];
-          const ok = isUnlocked(g.discoveredOrder.length, id);
-          const owned = !!g.upgrades[id];
+        <div>強化（図鑑 {game.discoveredOrder.length} 件）</div>
+        {upgradeList.map((upgradeId) => {
+          const upgrade = upgradeDef[upgradeId];
+          const unlocked = isUnlocked(game.discoveredOrder.length, upgradeId);
+          const owned = !!game.upgrades[upgradeId];
           return (
-            <div key={id} style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6 }}>
-              <div style={{ width: 140 }}>{u.name}</div>
-              <div style={{ width: 240 }}>{u.desc}（{u.price}G）</div>
+            <div key={upgradeId} style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6 }}>
+              <div style={{ width: 140 }}>{upgrade.name}</div>
+              <div style={{ width: 240 }}>{upgrade.desc}（{upgrade.price}G）</div>
               <button
-                disabled={!ok || owned || anim || g.money < u.price}
-                onClick={() => setG((x) => buyUpgrade(x, id))}
+                disabled={!unlocked || owned || animating || game.money < upgrade.price}
+                onClick={() => setGame((prevGame) => buyUpgrade(prevGame, upgradeId))}
               >
-                {owned ? "購入済み" : ok ? "購入" : "未解放"}
+                {owned ? "購入済み" : unlocked ? "購入" : "未解放"}
               </button>
             </div>
           );
@@ -115,19 +118,19 @@ export default function App() {
       </div>
 
       <div style={{ marginTop: 16 }}>
-        {workerList.map((id) => {
-          const price = workerPrice(g, id);
+        {workerList.map((workerId) => {
+          const price = workerPrice(game, workerId);
           return (
-            <div key={id} style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6 }}>
+            <div key={workerId} style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6 }}>
               <div style={{ width: 140 }}>
-                {workerDef[id].name} x{workerCount(g, id)}
+                {workerDef[workerId].name} x{workerCount(game, workerId)}
               </div>
               <div style={{ width: 180 }}>
-                {price}G / {workerDef[id].ms / 1000}sで{workerDef[id].dmg}
+                {price}G / {workerDef[workerId].ms / 1000}sで{workerDef[workerId].dmg}
               </div>
               <button
-                disabled={anim || g.money < price}
-                onClick={() => setG((x) => buyWorker(x, id, Date.now()))}
+                disabled={animating || game.money < price}
+                onClick={() => setGame((prevGame) => buyWorker(prevGame, workerId, Date.now()))}
               >
                 購入
               </button>
@@ -138,17 +141,20 @@ export default function App() {
 
       <div style={{ marginTop: 16 }}>
         <div>購入済みユニット（発火まで）</div>
-        {unitRows.map((u) => {
-          const ms = workerDef[u.id].ms;
-          const rem = Math.max(0, u.nextAt - now);
-          const prog = 1 - rem / ms;
+        {unitRows.map((unitRow) => {
+          const intervalMs = workerDef[unitRow.id].ms;
+          const remainingMs = Math.max(0, unitRow.nextAt - now);
+          const progress = 1 - remainingMs / intervalMs;
           return (
-            <div key={`${u.id}-${u.idx}`} style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6 }}>
-              <CircleTimer progress={prog} label="timer" />
+            <div
+              key={`${unitRow.id}-${unitRow.idx}`}
+              style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6 }}
+            >
+              <CircleTimer progress={progress} label="timer" />
               <div style={{ width: 140 }}>
-                {workerDef[u.id].name} #{u.idx + 1}
+                {workerDef[unitRow.id].name} #{unitRow.idx + 1}
               </div>
-              <div>{Math.ceil(rem / 1000)}s</div>
+              <div>{Math.ceil(remainingMs / 1000)}s</div>
             </div>
           );
         })}
@@ -163,13 +169,13 @@ export default function App() {
             </div>
 
             <div style={{ marginTop: 12 }}>
-              {g.discoveredOrder.length === 0 && <div>まだ見つかっていません。</div>}
-              {g.discoveredOrder.map((tid) => {
-                const tr = treasureIndex[tid];
+              {game.discoveredOrder.length === 0 && <div>まだ見つかっていません。</div>}
+              {game.discoveredOrder.map((treasureId) => {
+                const treasure = treasureIndex[treasureId];
                 return (
-                  <div key={tid} style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
-                    <div>{tr ? tr.name : tid}</div>
-                    <div style={{ opacity: 0.8 }}>{tr ? tr.target : "?"}</div>
+                  <div key={treasureId} style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
+                    <div>{treasure ? treasure.name : treasureId}</div>
+                    <div style={{ opacity: 0.8 }}>{treasure ? treasure.target : "?"}</div>
                   </div>
                 );
               })}

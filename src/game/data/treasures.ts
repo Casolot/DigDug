@@ -23,8 +23,8 @@ export const treasures: Record<TargetId, Treasure[]> = {
 export const treasureIndex: Record<string, Treasure & { target: TargetId }> = (() => {
   const out: Record<string, Treasure & { target: TargetId }> = {};
   (Object.keys(treasures) as TargetId[]).forEach((target) => {
-    treasures[target].forEach((tr) => {
-      out[tr.id] = { ...tr, target };
+    treasures[target].forEach((treasure) => {
+      out[treasure.id] = { ...treasure, target };
     });
   });
   return out;
