@@ -1,5 +1,6 @@
 :root {
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-size: 150%;
   line-height: 1.5;
   font-weight: 400;
 
@@ -52,6 +53,80 @@ button:hover {
 button:focus,
 button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
+}
+
+@keyframes damagePopupFloat {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%) translateY(0) scale(var(--dmg-scale, 1));
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) translateY(-48px) scale(var(--dmg-scale, 1));
+  }
+}
+
+.damagePopup {
+  --dmg-scale: 1;
+  position: fixed;
+  transform: translate(-50%, -50%) scale(var(--dmg-scale, 1));
+  pointer-events: none;
+  white-space: nowrap;
+  line-height: 1;
+  z-index: 9999;
+  text-shadow: 0 3px 14px rgba(0, 0, 0, 0.75);
+  animation: damagePopupFloat 1.3s ease-out forwards;
+  will-change: transform, opacity;
+}
+
+.damagePopup__suffix {
+  font-size: 0.5em;
+}
+
+.damagePopup--manual {
+  font-weight: 900;
+  font-size: 2.75rem;
+  color: #ffffff;
+}
+
+.damagePopup--worker {
+  font-weight: 800;
+  font-size: 1.375rem;
+  color: #60a5fa;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.65);
+}
+
+.damagePopup--effective {
+  color: #60a5fa;
+}
+
+.damagePopup--critical {
+  color: #ef4444;
+}
+
+@keyframes digButtonShake {
+  0% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-3px);
+  }
+  40% {
+    transform: translateX(3px);
+  }
+  60% {
+    transform: translateX(-2px);
+  }
+  80% {
+    transform: translateX(2px);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+.digButton--shake {
+  animation: digButtonShake 180ms ease-in-out;
 }
 
 @media (prefers-color-scheme: light) {

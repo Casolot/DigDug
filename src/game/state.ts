@@ -29,6 +29,10 @@ export type GameState = {
   lastTreasure?: { name: string; gold: number };
   lastClickDamage?: number;
 
+  // ダメージ演出用（手動/人手）
+  lastManualHit?: { dmg: number; at: number; mult: number };
+  lastWorkerHit?: { dmg: number; at: number };
+
   discovered: Record<string, true>;
   discoveredOrder: string[];
 
@@ -104,8 +108,12 @@ function clickMult(game: GameState): number {
 export function clickDig(game: GameState, now: number): GameState {
   const base = rollClickDamageBase();
   const dmg = base * clickMult(game);
+
+  // 0ダメージも演出として記録する（HPは減らさない）
+  if (dmg <= 0) return { ...game, lastClickDamage: 0, lastManualHit: { dmg: 0, at: now, mult: 0 } };
+
   const nextState = applyDamageToSelected(game, dmg, now);
-  return { ...nextState, lastClickDamage: dmg };
+  return { ...nextState, lastClickDamage: dmg, lastManualHit: { dmg, at: now, mult: dmg / CLICK_BASE_DAMAGE } };
 }
 
 export function workerCount(game: GameState, id: WorkerId): number {
@@ -152,7 +160,11 @@ export function tickWorkers(game: GameState, now: number): GameState {
     if (changed) {
       nextState = { ...nextState, workerUnits: { ...nextState.workerUnits, [workerId]: nextUnits } };
     }
-    if (typeDamage > 0) nextState = applyDamageToSelected(nextState, typeDamage, now);
+    if (typeDamage > 0) {
+      const afterDamage = applyDamageToSelected(nextState, typeDamage, now);
+      if (afterDamage !== nextState) nextState = { ...afterDamage, lastWorkerHit: { dmg: typeDamage, at: now } };
+      else nextState = afterDamage;
+    }
     if (isAnimatingSelected(nextState)) break;
   }
 

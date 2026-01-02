@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { ANIMATION_MS, WORKER_TICK_MS } from "./game/config";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ANIMATION_MS, CLICK_BASE_DAMAGE, WORKER_TICK_MS } from "./game/config";
 import {
   buyWorker,
   buyUpgrade,
@@ -19,10 +19,33 @@ import {
 import { upgradeDef, upgradeList, isUnlocked } from "./game/upgrades";
 import { CircleTimer } from "./components/CircleTimer";
 
+type DamagePopup = {
+  id: number;
+  kind: "manual" | "worker";
+  tone: "normal" | "effective" | "critical";
+  label: string;
+  dmg: number;
+  scale: number;
+  x: number;
+  y: number;
+};
+
+const damageTextScale = (dmg: number): number => {
+  // dmg = CLICK_BASE_DAMAGE * 10^n のとき、サイズは (1+n) 倍
+  const ratio = Math.max(1, dmg / CLICK_BASE_DAMAGE);
+  return 1 + Math.log10(ratio);
+};
+
 export default function App() {
   const [game, setGame] = useState(() => newGame());
   const [now, setNow] = useState(() => Date.now());
   const [dexOpen, setDexOpen] = useState(false);
+  const [damagePopups, setDamagePopups] = useState<DamagePopup[]>([]);
+  const [digShakeNonce, setDigShakeNonce] = useState(0);
+
+  const digButtonRef = useRef<HTMLButtonElement>(null);
+  const lastManualAtRef = useRef<number | null>(null);
+  const lastWorkerAtRef = useRef<number | null>(null);
 
   const selectedTarget = game.targets[game.selected];
   const animating = isAnimatingSelected(game);
@@ -46,6 +69,50 @@ export default function App() {
     return () => clearTimeout(timeoutId);
   }, [animating, game.selected]);
 
+  useEffect(() => {
+    const hit = game.lastManualHit;
+    if (!hit) return;
+    if (lastManualAtRef.current === hit.at) return;
+    lastManualAtRef.current = hit.at;
+
+    const btn = digButtonRef.current;
+    if (!btn) return;
+
+    const rect = btn.getBoundingClientRect();
+    const r = Math.random() * 48;
+    const t = Math.random() * Math.PI * 2;
+    const x = rect.left + rect.width / 2 + Math.cos(t) * r;
+    const y = rect.top + rect.height / 2 + Math.sin(t) * r;
+
+    const id = hit.at + Math.random();
+
+    const tone: DamagePopup["tone"] = hit.mult > 10 ? "critical" : hit.mult > 5 ? "effective" : "normal";
+    const label = tone === "critical" ? "Critical!" : tone === "effective" ? "effective!" : "";
+
+    setDamagePopups((prev) => [...prev, { id, kind: "manual", tone, label, dmg: hit.dmg, scale: damageTextScale(hit.dmg), x, y }]);
+    window.setTimeout(() => setDamagePopups((prev) => prev.filter((p) => p.id !== id)), 1300);
+  }, [game.lastManualHit]);
+
+  useEffect(() => {
+    const hit = game.lastWorkerHit;
+    if (!hit) return;
+    if (lastWorkerAtRef.current === hit.at) return;
+    lastWorkerAtRef.current = hit.at;
+
+    const btn = digButtonRef.current;
+    if (!btn) return;
+
+    const rect = btn.getBoundingClientRect();
+    const r = Math.random() * 48;
+    const t = Math.random() * Math.PI * 2;
+    const x = rect.left + rect.width / 2 + Math.cos(t) * r;
+    const y = rect.top + rect.height / 2 + Math.sin(t) * r;
+
+    const id = hit.at + Math.random();
+    setDamagePopups((prev) => [...prev, { id, kind: "worker", tone: "normal", label: "", dmg: hit.dmg, scale: damageTextScale(hit.dmg), x, y }]);
+    window.setTimeout(() => setDamagePopups((prev) => prev.filter((p) => p.id !== id)), 1300);
+  }, [game.lastWorkerHit]);
+
   const unitRows = useMemo(() => {
     const rows: { id: (typeof workerList)[number]; idx: number; nextAt: number }[] = [];
     workerList.forEach((workerId) => {
@@ -61,9 +128,6 @@ export default function App() {
         <button onClick={() => setDexOpen(true)}>図鑑</button>
       </div>
 
-      {game.lastClickDamage != null && (
-        <div style={{ marginTop: 6 }}>クリックダメージ: {game.lastClickDamage}</div>
-      )}
 
       {game.lastTreasure && (
         <div style={{ marginTop: 6 }}>
@@ -89,12 +153,30 @@ export default function App() {
       </div>
 
       <button
+        key={digShakeNonce}
+        ref={digButtonRef}
+        className={digShakeNonce > 0 ? "digButton digButton--shake" : "digButton"}
         disabled={animating}
-        onClick={() => setGame((prevGame) => clickDig(prevGame, Date.now()))}
+        onClick={() => {
+          setDigShakeNonce((n) => n + 1);
+          setGame((prevGame) => clickDig(prevGame, Date.now()));
+        }}
         style={{ marginTop: 12, padding: 16, width: 260 }}
       >
         {animating ? `演出中（${ANIMATION_MS / 1000}s）` : "掘る（クリック）"}
       </button>
+
+      {damagePopups.map((p) => (
+        <div
+          key={p.id}
+          className={`damagePopup damagePopup--${p.kind} damagePopup--${p.tone}`}
+          style={{ left: p.x, top: p.y, "--dmg-scale": p.scale } as React.CSSProperties}
+        >
+          {p.label && <span className="damagePopup__label">{p.label} </span>}
+          <span className="damagePopup__num">{p.dmg}</span>
+          <span className="damagePopup__suffix">ダメージ！</span>
+        </div>
+      ))}
 
       <div style={{ marginTop: 16 }}>
         <div>強化（図鑑 {game.discoveredOrder.length} 件）</div>
