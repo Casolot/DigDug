@@ -7,14 +7,15 @@ import {
   finishAnimation,
   newGame,
   selectTarget,
-  targetList,
   isAnimatingSelected,
+  targetLabel,
+  targetList,
   tickWorkers,
+  treasures,
   workerCount,
   workerDef,
   workerList,
   workerPrice,
-  treasureIndex,
 } from "./game/state";
 import { upgradeDef, upgradeList, isUnlocked, type UpgradeId } from "./game/upgrades";
 import { CircleTimer } from "./components/CircleTimer";
@@ -42,6 +43,7 @@ export default function App() {
   const [dexOpen, setDexOpen] = useState(false);
   const [damagePopups, setDamagePopups] = useState<DamagePopup[]>([]);
   const [digShakeNonce, setDigShakeNonce] = useState(0);
+  const [dismissedTreasureAt, setDismissedTreasureAt] = useState<number | null>(null);
 
   const digButtonRef = useRef<HTMLButtonElement>(null);
   const lastManualAtRef = useRef<number | null>(null);
@@ -49,6 +51,8 @@ export default function App() {
 
   const selectedTarget = game.targets[game.selected];
   const animating = isAnimatingSelected(game);
+  const treasurePopupOpen =
+    !!game.lastTreasure && dismissedTreasureAt !== game.lastTreasure.at && now - game.lastTreasure.at < 4500;
 
   const clickMult = useMemo(() => {
     let mult = 1;
@@ -142,10 +146,52 @@ export default function App() {
         <button onClick={() => setDexOpen(true)}>図鑑</button>
       </div>
 
-
-      {game.lastTreasure && (
-        <div style={{ marginTop: 6 }}>
-          入手: {game.lastTreasure.name} +{game.lastTreasure.gold}G
+      {treasurePopupOpen && game.lastTreasure && (
+        <div
+          style={{
+            position: "fixed",
+            right: 16,
+            top: 16,
+            background: "rgba(17,17,17,.95)",
+            color: "#fff",
+            padding: 12,
+            border: "1px solid rgba(255,255,255,.15)",
+            borderRadius: 10,
+            width: 320,
+            zIndex: 1000,
+          }}
+          role="dialog"
+          aria-label="Treasure obtained"
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+              <div style={{ fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {game.lastTreasure.name}
+              </div>
+              {game.lastTreasure.isNew && (
+                <span
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 700,
+                    background: "#ffcf33",
+                    color: "#111",
+                    padding: "2px 8px",
+                    borderRadius: 999,
+                  }}
+                >
+                  New
+                </span>
+              )}
+            </div>
+            <button
+              onClick={() => game.lastTreasure && setDismissedTreasureAt(game.lastTreasure.at)}
+              style={{ background: "transparent", color: "#fff" }}
+            >
+              ×
+            </button>
+          </div>
+          <div style={{ marginTop: 8, opacity: 0.9, lineHeight: 1.4 }}>{game.lastTreasure.desc}</div>
+          <div style={{ marginTop: 8, fontWeight: 700 }}>+{game.lastTreasure.gold}G</div>
         </div>
       )}
 
@@ -157,7 +203,7 @@ export default function App() {
             onClick={() => setGame((prevGame) => selectTarget(prevGame, targetId))}
             style={{ fontWeight: game.selected === targetId ? "bold" : "normal" }}
           >
-            {targetId}
+            {targetLabel[targetId]}
           </button>
         ))}
       </div>
@@ -267,18 +313,30 @@ export default function App() {
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", padding: 24 }}>
           <div style={{ background: "#111", color: "#fff", maxWidth: 520, margin: "0 auto", padding: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>図鑑（発見済み）</div>
+              <div>図鑑</div>
               <button onClick={() => setDexOpen(false)}>閉じる</button>
             </div>
 
             <div style={{ marginTop: 12 }}>
-              {game.discoveredOrder.length === 0 && <div>まだ見つかっていません。</div>}
-              {game.discoveredOrder.map((treasureId) => {
-                const treasure = treasureIndex[treasureId];
+              {targetList.map((targetId) => {
+                const list = treasures[targetId];
+                const unlocked = list.filter((t) => game.discovered[t.id] === true).length;
                 return (
-                  <div key={treasureId} style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
-                    <div>{treasure ? treasure.name : treasureId}</div>
-                    <div style={{ opacity: 0.8 }}>{treasure ? treasure.target : "?"}</div>
+                  <div key={targetId} style={{ marginTop: 14 }}>
+                    <div style={{ fontWeight: 700 }}>
+                      {targetLabel[targetId]}（{unlocked}/{list.length}）
+                    </div>
+                    {list.map((t) => {
+                      const isFound = game.discovered[t.id] === true;
+                      return (
+                        <div
+                          key={t.id}
+                          style={{ display: "flex", justifyContent: "space-between", marginTop: 6, opacity: isFound ? 1 : 0.55 }}
+                        >
+                          <div>{isFound ? t.name : "？？？"}</div>
+                        </div>
+                      );
+                    })}
                   </div>
                 );
               })}
