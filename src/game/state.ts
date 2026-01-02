@@ -29,6 +29,9 @@ export type GameState = {
   lastTreasure?: { name: string; gold: number };
   lastClickDamage?: number;
 
+  // 次のクリックの事前ロール（HPバーの黄色プレビュー用）
+  nextClickBase: number;
+
   // ダメージ演出用（手動/人手）
   lastManualHit?: { dmg: number; at: number; mult: number };
   lastWorkerHit?: { dmg: number; at: number };
@@ -56,6 +59,7 @@ export function newGame(): GameState {
     targets: { rock: newTarget("rock"), house: newTarget("house"), mine: newTarget("mine") },
     workerUnits: { scavenger: [], caver: [], excavator: [] },
     animStartedAt: null,
+    nextClickBase: rollClickDamageBase(),
     discovered: {},
     discoveredOrder: [],
     upgrades: {} as Record<UpgradeId, true>,
@@ -106,14 +110,21 @@ function clickMult(game: GameState): number {
 }
 
 export function clickDig(game: GameState, now: number): GameState {
-  const base = rollClickDamageBase();
+  const base = game.nextClickBase;
   const dmg = base * clickMult(game);
+  const nextClickBase = rollClickDamageBase();
 
   // 0ダメージも演出として記録する（HPは減らさない）
-  if (dmg <= 0) return { ...game, lastClickDamage: 0, lastManualHit: { dmg: 0, at: now, mult: 0 } };
+  if (dmg <= 0)
+    return { ...game, nextClickBase, lastClickDamage: 0, lastManualHit: { dmg: 0, at: now, mult: 0 } };
 
   const nextState = applyDamageToSelected(game, dmg, now);
-  return { ...nextState, lastClickDamage: dmg, lastManualHit: { dmg, at: now, mult: dmg / CLICK_BASE_DAMAGE } };
+  return {
+    ...nextState,
+    nextClickBase,
+    lastClickDamage: dmg,
+    lastManualHit: { dmg, at: now, mult: dmg / CLICK_BASE_DAMAGE },
+  };
 }
 
 export function workerCount(game: GameState, id: WorkerId): number {

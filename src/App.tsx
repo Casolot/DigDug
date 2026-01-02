@@ -16,7 +16,7 @@ import {
   workerPrice,
   treasureIndex,
 } from "./game/state";
-import { upgradeDef, upgradeList, isUnlocked } from "./game/upgrades";
+import { upgradeDef, upgradeList, isUnlocked, type UpgradeId } from "./game/upgrades";
 import { CircleTimer } from "./components/CircleTimer";
 
 type DamagePopup = {
@@ -49,6 +49,20 @@ export default function App() {
 
   const selectedTarget = game.targets[game.selected];
   const animating = isAnimatingSelected(game);
+
+  const clickMult = useMemo(() => {
+    let mult = 1;
+    for (const upgradeId of Object.keys(game.upgrades) as UpgradeId[]) mult *= upgradeDef[upgradeId].mult;
+    return mult;
+  }, [game.upgrades]);
+
+  const previewDamage = animating ? 0 : Math.max(0, game.nextClickBase * clickMult);
+  const previewClamped = Math.min(selectedTarget.hp, previewDamage);
+  const hpGreen = selectedTarget.hp - previewClamped;
+  const hpYellow = previewClamped;
+  const hpBlack = selectedTarget.maxHp - selectedTarget.hp;
+
+  const pct = (v: number) => (selectedTarget.maxHp <= 0 ? 0 : (v / selectedTarget.maxHp) * 100);
 
   useEffect(() => {
     const intervalId = setInterval(() => {
@@ -148,8 +162,15 @@ export default function App() {
         ))}
       </div>
 
-      <div style={{ marginTop: 12 }}>
-        HP: {selectedTarget.hp}/{selectedTarget.maxHp} ({selectedTarget.state})
+      <div style={{ marginTop: 12, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+        <div>
+          HP: {selectedTarget.hp}/{selectedTarget.maxHp} ({selectedTarget.state})
+        </div>
+        <div className="hpBar" role="img" aria-label="HP bar">
+          <div className="hpBar__seg hpBar__seg--green" style={{ width: `${pct(hpGreen)}%` }} />
+          <div className="hpBar__seg hpBar__seg--yellow" style={{ width: `${pct(hpYellow)}%` }} />
+          <div className="hpBar__seg hpBar__seg--black" style={{ width: `${pct(hpBlack)}%` }} />
+        </div>
       </div>
 
       <button
