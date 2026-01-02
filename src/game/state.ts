@@ -178,7 +178,7 @@ export function finishAnimation(g: GameState, id: TargetId, now: number): GameSt
   const tr = pickTreasure(id);
   const gold = rollGold(tr.base);
 
-  const paused = g.animStartedAt == null ? 0 : Math.max(0, now - g.animStartedAt);
+  const paused = g.animStartedAt === null ? 0 : Math.max(0, now - g.animStartedAt);
   const restored = shiftAllUnits({ ...g, animStartedAt: null }, paused);
 
   const isNew = restored.discovered[tr.id] !== true;
