@@ -268,48 +268,54 @@ export default function App() {
 
             <div>現在の探索力: {CLICK_BASE_DAMAGE + clickBonus}</div>
 
-            {upgradeList
-              .filter((upgradeId) => isUnlocked(game.discoveredOrder.length, upgradeId))
-              .map((upgradeId) => {
-                const upgrade = upgradeDef[upgradeId];
-                const owned = !!game.upgrades[upgradeId];
-                return (
-                  <div key={upgradeId} style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6 }}>
-                    <div style={{ width: 140 }}>{upgrade.name}</div>
-                    <div style={{ width: 240 }}>{upgrade.desc}（{upgrade.price}G）</div>
-                    <button
-                      disabled={owned || animating || game.money < upgrade.price}
-                      onClick={() => setGame((prevGame) => buyUpgrade(prevGame, upgradeId))}
-                    >
-                      {owned ? "購入済み" : "購入"}
-                    </button>
-                  </div>
-                );
-              })}
+            <div className="shopRow" aria-label="強化アイテム一覧">
+              {upgradeList
+                .filter((upgradeId) => isUnlocked(game.discoveredOrder.length, upgradeId))
+                .filter((upgradeId) => !game.upgrades[upgradeId])
+                .map((upgradeId) => {
+                  const upgrade = upgradeDef[upgradeId];
+                  return (
+                    <div key={upgradeId} className="shopCard">
+                      <div className="shopCard__title">{upgrade.name}</div>
+                      <div className="shopCard__meta">{upgrade.price}G</div>
+                      <div className="shopCard__desc">{upgrade.desc}</div>
+                      <button
+                        disabled={animating || game.money < upgrade.price}
+                        onClick={() => setGame((prevGame) => buyUpgrade(prevGame, upgradeId))}
+                      >
+                        購入
+                      </button>
+                    </div>
+                  );
+                })}
+            </div>
           </section>
 
           <section className="window" aria-label="ワーカー購入窓">
             <div className="windowTitle">ワーカー購入</div>
 
-            {workerList.map((workerId) => {
-              const price = workerPrice(game, workerId);
-              return (
-                <div key={workerId} style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6 }}>
-                  <div style={{ width: 140 }}>
-                    {workerDef[workerId].name} x{workerCount(game, workerId)}
+            <div className="shopRow" aria-label="ワーカー商品一覧">
+              {workerList.map((workerId) => {
+                const price = workerPrice(game, workerId);
+                return (
+                  <div key={workerId} className="shopCard">
+                    <div className="shopCard__title">
+                      {workerDef[workerId].name}×{workerCount(game, workerId)}
+                    </div>
+                    <div className="shopCard__meta">{price}G</div>
+                    <div className="shopCard__desc">
+                      {workerDef[workerId].ms / 1000}sで{workerDef[workerId].dmg}
+                    </div>
+                    <button
+                      disabled={animating || game.money < price}
+                      onClick={() => setGame((prevGame) => buyWorker(prevGame, workerId, Date.now()))}
+                    >
+                      購入
+                    </button>
                   </div>
-                  <div style={{ width: 180 }}>
-                    {price}G / {workerDef[workerId].ms / 1000}sで{workerDef[workerId].dmg}
-                  </div>
-                  <button
-                    disabled={animating || game.money < price}
-                    onClick={() => setGame((prevGame) => buyWorker(prevGame, workerId, Date.now()))}
-                  >
-                    購入
-                  </button>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </section>
         </div>
 

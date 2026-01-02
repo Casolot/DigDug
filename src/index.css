@@ -89,6 +89,46 @@ body {
   margin-bottom: 8px;
 }
 
+.shopRow {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  margin-top: 8px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.shopCard {
+  flex: 0 0 auto;
+  width: 180px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  background: rgba(17, 17, 17, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.shopCard__title {
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.shopCard__meta {
+  opacity: 0.95;
+}
+
+.shopCard__desc {
+  font-size: 0.85em;
+  opacity: 0.9;
+}
+
+.shopCard > button {
+  width: 100%;
+  margin-top: auto;
+}
+
 .workerWindow {
   flex: 1;
   min-height: 0;
