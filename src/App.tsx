@@ -57,13 +57,13 @@ export default function App() {
   const moneyFxActive = !!game.lastTreasure && now - game.lastTreasure.at < 1100;
   const moneyShakeActive = !!game.lastTreasure && now - game.lastTreasure.at < 220;
 
-  const clickMult = useMemo(() => {
-    let mult = 1;
-    for (const upgradeId of Object.keys(game.upgrades) as UpgradeId[]) mult *= upgradeDef[upgradeId].mult;
-    return mult;
+  const clickBonus = useMemo(() => {
+    let bonus = 0;
+    for (const upgradeId of Object.keys(game.upgrades) as UpgradeId[]) bonus += upgradeDef[upgradeId].add;
+    return bonus;
   }, [game.upgrades]);
 
-  const previewDamage = animating ? 0 : Math.max(0, game.nextClickBase * clickMult);
+  const previewDamage = animating ? 0 : Math.max(0, game.nextClickBase + clickBonus);
   const previewClamped = Math.min(selectedTarget.hp, previewDamage);
   const hpGreen = selectedTarget.hp - previewClamped;
   const hpYellow = previewClamped;
@@ -276,51 +276,53 @@ export default function App() {
             ))}
           </section>
 
-          <section className="window" aria-label="購入窓">
-            <div className="windowTitle">購入</div>
+          <section className="window" aria-label="強化購入窓">
+            <div className="windowTitle">強化</div>
 
-            <div>
-              <div>強化（図鑑 {game.discoveredOrder.length} 件）</div>
-              {upgradeList.map((upgradeId) => {
+            <div>現在の探索力: {CLICK_BASE_DAMAGE + clickBonus}</div>
+
+            {upgradeList
+              .filter((upgradeId) => isUnlocked(game.discoveredOrder.length, upgradeId))
+              .map((upgradeId) => {
                 const upgrade = upgradeDef[upgradeId];
-                const unlocked = isUnlocked(game.discoveredOrder.length, upgradeId);
                 const owned = !!game.upgrades[upgradeId];
                 return (
                   <div key={upgradeId} style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6 }}>
                     <div style={{ width: 140 }}>{upgrade.name}</div>
                     <div style={{ width: 240 }}>{upgrade.desc}（{upgrade.price}G）</div>
                     <button
-                      disabled={!unlocked || owned || animating || game.money < upgrade.price}
+                      disabled={owned || animating || game.money < upgrade.price}
                       onClick={() => setGame((prevGame) => buyUpgrade(prevGame, upgradeId))}
                     >
-                      {owned ? "購入済み" : unlocked ? "購入" : "未解放"}
+                      {owned ? "購入済み" : "購入"}
                     </button>
                   </div>
                 );
               })}
-            </div>
+          </section>
 
-            <div style={{ marginTop: 16 }}>
-              {workerList.map((workerId) => {
-                const price = workerPrice(game, workerId);
-                return (
-                  <div key={workerId} style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6 }}>
-                    <div style={{ width: 140 }}>
-                      {workerDef[workerId].name} x{workerCount(game, workerId)}
-                    </div>
-                    <div style={{ width: 180 }}>
-                      {price}G / {workerDef[workerId].ms / 1000}sで{workerDef[workerId].dmg}
-                    </div>
-                    <button
-                      disabled={animating || game.money < price}
-                      onClick={() => setGame((prevGame) => buyWorker(prevGame, workerId, Date.now()))}
-                    >
-                      購入
-                    </button>
+          <section className="window" aria-label="ワーカー購入窓">
+            <div className="windowTitle">ワーカー購入</div>
+
+            {workerList.map((workerId) => {
+              const price = workerPrice(game, workerId);
+              return (
+                <div key={workerId} style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6 }}>
+                  <div style={{ width: 140 }}>
+                    {workerDef[workerId].name} x{workerCount(game, workerId)}
                   </div>
-                );
-              })}
-            </div>
+                  <div style={{ width: 180 }}>
+                    {price}G / {workerDef[workerId].ms / 1000}sで{workerDef[workerId].dmg}
+                  </div>
+                  <button
+                    disabled={animating || game.money < price}
+                    onClick={() => setGame((prevGame) => buyWorker(prevGame, workerId, Date.now()))}
+                  >
+                    購入
+                  </button>
+                </div>
+              );
+            })}
           </section>
         </div>
 

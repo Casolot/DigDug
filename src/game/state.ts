@@ -125,15 +125,15 @@ function rollClickDamageBase(): number {
   return Math.floor(Math.random() * (lastTier.maxMul + 1)) * CLICK_BASE_DAMAGE;
 }
 
-function clickMult(game: GameState): number {
-  let mult = 1;
-  for (const upgradeId of Object.keys(game.upgrades) as UpgradeId[]) mult *= upgradeDef[upgradeId].mult;
-  return mult;
+function clickBonus(game: GameState): number {
+  let bonus = 0;
+  for (const upgradeId of Object.keys(game.upgrades) as UpgradeId[]) bonus += upgradeDef[upgradeId].add;
+  return bonus;
 }
 
 export function clickDig(game: GameState, now: number): GameState {
   const base = game.nextClickBase;
-  const dmg = base * clickMult(game);
+  const dmg = Math.max(0, base + clickBonus(game));
   const nextClickBase = rollClickDamageBase();
 
   // 0ダメージも演出として記録する（HPは減らさない）
