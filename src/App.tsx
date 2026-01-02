@@ -12,6 +12,7 @@ import {
   targetList,
   tickWorkers,
   treasures,
+  treasureIndex,
   workerCount,
   workerDef,
   workerList,
@@ -41,6 +42,7 @@ export default function App() {
   const [game, setGame] = useState(() => newGame());
   const [now, setNow] = useState(() => Date.now());
   const [dexOpen, setDexOpen] = useState(false);
+  const [dexTreasureId, setDexTreasureId] = useState<string | null>(null);
   const [damagePopups, setDamagePopups] = useState<DamagePopup[]>([]);
   const [digShakeNonce, setDigShakeNonce] = useState(0);
   const [dismissedTreasureAt, setDismissedTreasureAt] = useState<number | null>(null);
@@ -52,6 +54,7 @@ export default function App() {
   const selectedTarget = game.targets[game.selected];
   const animating = isAnimatingSelected(game);
   const treasurePopupOpen = !!game.lastTreasure && dismissedTreasureAt !== game.lastTreasure.at;
+  const dexTreasure = dexTreasureId ? treasureIndex[dexTreasureId] : null;
 
   const moneyFxActive = !!game.lastTreasure && now - game.lastTreasure.at < 1100;
   const moneyShakeActive = !!game.lastTreasure && now - game.lastTreasure.at < 220;
@@ -156,7 +159,14 @@ export default function App() {
             {moneyFxActive && game.lastTreasure && <span className="moneyGainPopup">+{game.lastTreasure.gold}G</span>}
           </span>
         </div>
-        <button onClick={() => setDexOpen(true)}>図鑑</button>
+        <button
+          onClick={() => {
+            setDexOpen(true);
+            setDexTreasureId(null);
+          }}
+        >
+          図鑑
+        </button>
       </header>
 
       {treasurePopupOpen && game.lastTreasure && (
@@ -350,7 +360,14 @@ export default function App() {
           <div style={{ background: "#111", color: "#fff", maxWidth: 520, margin: "0 auto", padding: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>図鑑</div>
-              <button onClick={() => setDexOpen(false)}>閉じる</button>
+              <button
+                onClick={() => {
+                  setDexOpen(false);
+                  setDexTreasureId(null);
+                }}
+              >
+                閉じる
+              </button>
             </div>
 
             <div style={{ marginTop: 12 }}>
@@ -365,18 +382,56 @@ export default function App() {
                     {list.map((t) => {
                       const isFound = game.discovered[t.id] === true;
                       return (
-                        <div
+                        <button
                           key={t.id}
-                          style={{ display: "flex", justifyContent: "space-between", marginTop: 6, opacity: isFound ? 1 : 0.55 }}
+                          type="button"
+                          disabled={!isFound}
+                          onClick={() => setDexTreasureId(t.id)}
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            width: "100%",
+                            marginTop: 6,
+                            opacity: isFound ? 1 : 0.55,
+                            cursor: isFound ? "pointer" : "default",
+                            background: "transparent",
+                            border: "none",
+                            padding: 0,
+                            color: "inherit",
+                            textAlign: "left",
+                          }}
                         >
-                          <div>{isFound ? t.name : "？？？"}</div>
-                        </div>
+                          <span>{isFound ? t.name : "？？？"}</span>
+                        </button>
                       );
                     })}
                   </div>
                 );
               })}
             </div>
+          </div>
+        </div>
+      )}
+
+      {dexTreasure && (
+        <div className="treasureModalOverlay" role="presentation" onClick={() => setDexTreasureId(null)}>
+          <div className="treasureModal" role="dialog" aria-label="Treasure details" onClick={(e) => e.stopPropagation()}>
+            <button className="treasureModal__close" onClick={() => setDexTreasureId(null)} aria-label="Close">
+              ×
+            </button>
+
+            <div className="treasureModal__titleWrap">
+              <div className="treasureModal__title">{dexTreasure.name}</div>
+            </div>
+
+            <div className="treasureModal__subtitle">の詳細</div>
+
+            <div className="treasureModal__icon" aria-hidden>
+              📖
+            </div>
+
+            <div className="treasureModal__gold">平均金額: {dexTreasure.base}G</div>
+            <div className="treasureModal__desc">{dexTreasure.desc}</div>
           </div>
         </div>
       )}
