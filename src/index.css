@@ -303,6 +303,98 @@ button:focus-visible {
   will-change: transform, opacity;
 }
 
+.treasureModalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.treasureModal {
+  position: relative;
+  width: min(480px, calc(100vw - 32px));
+  padding: 18px 20px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(17, 17, 17, 0.97);
+  color: #fff;
+  text-align: center;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.6);
+  transform: scale(1.5);
+  transform-origin: center;
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+}
+
+@media (max-width: 600px) {
+  .treasureModal {
+    transform: scale(1);
+  }
+}
+
+.treasureModal__close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 0.25em 0.55em;
+  background: transparent;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 10px;
+  line-height: 1;
+}
+
+.treasureModal__titleWrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.treasureModal__title {
+  font-weight: 900;
+  font-size: 1.35rem;
+  letter-spacing: 0.02em;
+}
+
+.treasureModal__badge {
+  font-size: 0.75rem;
+  font-weight: 900;
+  background: #ffcf33;
+  color: #111;
+  padding: 0.15em 0.6em;
+  border-radius: 999px;
+}
+
+.treasureModal__subtitle {
+  margin-top: 6px;
+  font-weight: 800;
+}
+
+.treasureModal__icon {
+  margin-top: 10px;
+  font-size: 2.25rem;
+  line-height: 1;
+}
+
+.treasureModal__gold {
+  margin-top: 12px;
+  font-weight: 900;
+  color: #facc15;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.65);
+}
+
+.treasureModal__desc {
+  margin-top: 10px;
+  opacity: 0.9;
+  line-height: 1.5;
+  text-align: left;
+}
+
 .hpBar {
   width: 260px;
   height: 12px;

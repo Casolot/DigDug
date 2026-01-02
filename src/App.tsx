@@ -51,8 +51,7 @@ export default function App() {
 
   const selectedTarget = game.targets[game.selected];
   const animating = isAnimatingSelected(game);
-  const treasurePopupOpen =
-    !!game.lastTreasure && dismissedTreasureAt !== game.lastTreasure.at && now - game.lastTreasure.at < 4500;
+  const treasurePopupOpen = !!game.lastTreasure && dismissedTreasureAt !== game.lastTreasure.at;
 
   const moneyFxActive = !!game.lastTreasure && now - game.lastTreasure.at < 1100;
   const moneyShakeActive = !!game.lastTreasure && now - game.lastTreasure.at < 220;
@@ -162,50 +161,38 @@ export default function App() {
 
       {treasurePopupOpen && game.lastTreasure && (
         <div
-          style={{
-            position: "fixed",
-            right: 16,
-            top: 16,
-            background: "rgba(17,17,17,.95)",
-            color: "#fff",
-            padding: 12,
-            border: "1px solid rgba(255,255,255,.15)",
-            borderRadius: 10,
-            width: 320,
-            zIndex: 1000,
-          }}
-          role="dialog"
-          aria-label="Treasure obtained"
+          className="treasureModalOverlay"
+          role="presentation"
+          onClick={() => setDismissedTreasureAt(game.lastTreasure!.at)}
         >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-              <div style={{ fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {game.lastTreasure.name}
-              </div>
-              {game.lastTreasure.isNew && (
-                <span
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 700,
-                    background: "#ffcf33",
-                    color: "#111",
-                    padding: "2px 8px",
-                    borderRadius: 999,
-                  }}
-                >
-                  New
-                </span>
-              )}
-            </div>
+          <div
+            className="treasureModal"
+            role="dialog"
+            aria-label="Treasure obtained"
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
-              onClick={() => game.lastTreasure && setDismissedTreasureAt(game.lastTreasure.at)}
-              style={{ background: "transparent", color: "#fff" }}
+              className="treasureModal__close"
+              onClick={() => setDismissedTreasureAt(game.lastTreasure!.at)}
+              aria-label="Close"
             >
               ×
             </button>
+
+            <div className="treasureModal__titleWrap">
+              <div className="treasureModal__title">{game.lastTreasure.name.toUpperCase()}</div>
+              {game.lastTreasure.isNew && <span className="treasureModal__badge">NEW</span>}
+            </div>
+
+            <div className="treasureModal__subtitle">を手に入れた！</div>
+
+            <div className="treasureModal__icon" aria-hidden>
+              🎁
+            </div>
+
+            <div className="treasureModal__gold">代金: +{game.lastTreasure.gold}G</div>
+            <div className="treasureModal__desc">{game.lastTreasure.desc}</div>
           </div>
-          <div style={{ marginTop: 8, opacity: 0.9, lineHeight: 1.4 }}>{game.lastTreasure.desc}</div>
-          <div style={{ marginTop: 8, fontWeight: 700 }}>+{game.lastTreasure.gold}G</div>
         </div>
       )}
 
