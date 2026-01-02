@@ -8,6 +8,7 @@ import {
   newGame,
   selectTarget,
   targetList,
+  isAnimatingSelected,
   tickWorkers,
   workerCount,
   workerDef,
@@ -24,7 +25,7 @@ export default function App() {
   const [dexOpen, setDexOpen] = useState(false);
 
   const t = g.targets[g.selected];
-  const anim = t.state !== "normal";
+  const anim = isAnimatingSelected(g);
 
   useEffect(() => {
     const h = setInterval(() => {
