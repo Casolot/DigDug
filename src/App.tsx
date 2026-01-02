@@ -140,11 +140,11 @@ export default function App() {
   }, [game.workerUnits]);
 
   return (
-    <div style={{ padding: 16, fontFamily: "system-ui" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+    <div className="app">
+      <header className="appHeader">
         <div>所持金: {game.money}G</div>
         <button onClick={() => setDexOpen(true)}>図鑑</button>
-      </div>
+      </header>
 
       {treasurePopupOpen && game.lastTreasure && (
         <div
@@ -195,129 +195,145 @@ export default function App() {
         </div>
       )}
 
-      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-        {targetList.map((targetId) => (
-          <button
-            key={targetId}
-            disabled={animating}
-            onClick={() => setGame((prevGame) => selectTarget(prevGame, targetId))}
-            style={{ fontWeight: game.selected === targetId ? "bold" : "normal" }}
-          >
-            {targetLabel[targetId]}
-          </button>
-        ))}
-      </div>
+      <div className="appMain">
+        <div className="appLeft">
+          <section className="window" aria-label="探索対象窓">
+            <div className="windowTitle">探索対象</div>
 
-      <div style={{ marginTop: 12, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-        <div>
-          HP: {selectedTarget.hp}/{selectedTarget.maxHp} ({selectedTarget.state})
-        </div>
-        <div className="hpBar" role="img" aria-label="HP bar">
-          <div className="hpBar__seg hpBar__seg--green" style={{ width: `${pct(hpGreen)}%` }} />
-          <div className="hpBar__seg hpBar__seg--yellow" style={{ width: `${pct(hpYellow)}%` }} />
-          <div className="hpBar__seg hpBar__seg--black" style={{ width: `${pct(hpBlack)}%` }} />
-        </div>
-      </div>
-
-      <button
-        key={digShakeNonce}
-        ref={digButtonRef}
-        className={digShakeNonce > 0 ? "digButton digButton--shake" : "digButton"}
-        disabled={animating}
-        aria-label={animating ? "演出中" : "掘る"}
-        onClick={() => {
-          setDigShakeNonce((n) => n + 1);
-          setGame((prevGame) => clickDig(prevGame, Date.now()));
-        }}
-        style={{ marginTop: 12 }}
-      >
-        {animating ? (
-          <CircleTimer
-            progress={game.animStartedAt ? (now - game.animStartedAt) / ANIMATION_MS : 0}
-            label="演出中"
-            size={96}
-          />
-        ) : (
-          <span className="digButton__emoji" aria-hidden="true">
-            {game.selected === "rock" ? "🪨" : game.selected === "house" ? "🏠" : "⛏️"}
-          </span>
-        )}
-      </button>
-
-      {damagePopups.map((p) => (
-        <div
-          key={p.id}
-          className={`damagePopup damagePopup--${p.kind} damagePopup--${p.tone}`}
-          style={{ left: p.x, top: p.y, "--dmg-scale": p.scale } as React.CSSProperties}
-        >
-          {p.label && <span className="damagePopup__label">{p.label}</span>}
-          <span className="damagePopup__num">{p.dmg}</span>
-          <span className="damagePopup__suffix">ダメージ！</span>
-        </div>
-      ))}
-
-      <div style={{ marginTop: 16 }}>
-        <div>強化（図鑑 {game.discoveredOrder.length} 件）</div>
-        {upgradeList.map((upgradeId) => {
-          const upgrade = upgradeDef[upgradeId];
-          const unlocked = isUnlocked(game.discoveredOrder.length, upgradeId);
-          const owned = !!game.upgrades[upgradeId];
-          return (
-            <div key={upgradeId} style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6 }}>
-              <div style={{ width: 140 }}>{upgrade.name}</div>
-              <div style={{ width: 240 }}>{upgrade.desc}（{upgrade.price}G）</div>
-              <button
-                disabled={!unlocked || owned || animating || game.money < upgrade.price}
-                onClick={() => setGame((prevGame) => buyUpgrade(prevGame, upgradeId))}
-              >
-                {owned ? "購入済み" : unlocked ? "購入" : "未解放"}
-              </button>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {targetList.map((targetId) => (
+                <button
+                  key={targetId}
+                  disabled={animating}
+                  onClick={() => setGame((prevGame) => selectTarget(prevGame, targetId))}
+                  style={{ fontWeight: game.selected === targetId ? "bold" : "normal" }}
+                >
+                  {targetLabel[targetId]}
+                </button>
+              ))}
             </div>
-          );
-        })}
-      </div>
 
-      <div style={{ marginTop: 16 }}>
-        {workerList.map((workerId) => {
-          const price = workerPrice(game, workerId);
-          return (
-            <div key={workerId} style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6 }}>
-              <div style={{ width: 140 }}>
-                {workerDef[workerId].name} x{workerCount(game, workerId)}
+            <div style={{ marginTop: 12, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+              <div>
+                HP: {selectedTarget.hp}/{selectedTarget.maxHp} ({selectedTarget.state})
               </div>
-              <div style={{ width: 180 }}>
-                {price}G / {workerDef[workerId].ms / 1000}sで{workerDef[workerId].dmg}
+              <div className="hpBar" role="img" aria-label="HP bar">
+                <div className="hpBar__seg hpBar__seg--green" style={{ width: `${pct(hpGreen)}%` }} />
+                <div className="hpBar__seg hpBar__seg--yellow" style={{ width: `${pct(hpYellow)}%` }} />
+                <div className="hpBar__seg hpBar__seg--black" style={{ width: `${pct(hpBlack)}%` }} />
               </div>
-              <button
-                disabled={animating || game.money < price}
-                onClick={() => setGame((prevGame) => buyWorker(prevGame, workerId, Date.now()))}
-              >
-                購入
-              </button>
             </div>
-          );
-        })}
-      </div>
 
-      <div style={{ marginTop: 16 }}>
-        <div>購入済みユニット（発火まで）</div>
-        {unitRows.map((unitRow) => {
-          const intervalMs = workerDef[unitRow.id].ms;
-          const remainingMs = Math.max(0, unitRow.nextAt - now);
-          const progress = 1 - remainingMs / intervalMs;
-          return (
-            <div
-              key={`${unitRow.id}-${unitRow.idx}`}
-              style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6 }}
+            <button
+              key={digShakeNonce}
+              ref={digButtonRef}
+              className={digShakeNonce > 0 ? "digButton digButton--shake" : "digButton"}
+              disabled={animating}
+              aria-label={animating ? "演出中" : "掘る"}
+              onClick={() => {
+                setDigShakeNonce((n) => n + 1);
+                setGame((prevGame) => clickDig(prevGame, Date.now()));
+              }}
+              style={{ marginTop: 12 }}
             >
-              <CircleTimer progress={progress} label="timer" />
-              <div style={{ width: 140 }}>
-                {workerDef[unitRow.id].name} #{unitRow.idx + 1}
+              {animating ? (
+                <CircleTimer
+                  progress={game.animStartedAt ? (now - game.animStartedAt) / ANIMATION_MS : 0}
+                  label="演出中"
+                  size={96}
+                />
+              ) : (
+                <span className="digButton__emoji" aria-hidden="true">
+                  {game.selected === "rock" ? "🪨" : game.selected === "house" ? "🏠" : "⛏️"}
+                </span>
+              )}
+            </button>
+
+            {damagePopups.map((p) => (
+              <div
+                key={p.id}
+                className={`damagePopup damagePopup--${p.kind} damagePopup--${p.tone}`}
+                style={{ left: p.x, top: p.y, "--dmg-scale": p.scale } as React.CSSProperties}
+              >
+                {p.label && <span className="damagePopup__label">{p.label}</span>}
+                <span className="damagePopup__num">{p.dmg}</span>
+                <span className="damagePopup__suffix">ダメージ！</span>
               </div>
-              <div>{Math.ceil(remainingMs / 1000)}s</div>
+            ))}
+          </section>
+
+          <section className="window" aria-label="購入窓">
+            <div className="windowTitle">購入</div>
+
+            <div>
+              <div>強化（図鑑 {game.discoveredOrder.length} 件）</div>
+              {upgradeList.map((upgradeId) => {
+                const upgrade = upgradeDef[upgradeId];
+                const unlocked = isUnlocked(game.discoveredOrder.length, upgradeId);
+                const owned = !!game.upgrades[upgradeId];
+                return (
+                  <div key={upgradeId} style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6 }}>
+                    <div style={{ width: 140 }}>{upgrade.name}</div>
+                    <div style={{ width: 240 }}>{upgrade.desc}（{upgrade.price}G）</div>
+                    <button
+                      disabled={!unlocked || owned || animating || game.money < upgrade.price}
+                      onClick={() => setGame((prevGame) => buyUpgrade(prevGame, upgradeId))}
+                    >
+                      {owned ? "購入済み" : unlocked ? "購入" : "未解放"}
+                    </button>
+                  </div>
+                );
+              })}
             </div>
-          );
-        })}
+
+            <div style={{ marginTop: 16 }}>
+              {workerList.map((workerId) => {
+                const price = workerPrice(game, workerId);
+                return (
+                  <div key={workerId} style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6 }}>
+                    <div style={{ width: 140 }}>
+                      {workerDef[workerId].name} x{workerCount(game, workerId)}
+                    </div>
+                    <div style={{ width: 180 }}>
+                      {price}G / {workerDef[workerId].ms / 1000}sで{workerDef[workerId].dmg}
+                    </div>
+                    <button
+                      disabled={animating || game.money < price}
+                      onClick={() => setGame((prevGame) => buyWorker(prevGame, workerId, Date.now()))}
+                    >
+                      購入
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        </div>
+
+        <div className="appRight">
+          <section className="window workerWindow" aria-label="ワーカー窓">
+            <div className="windowTitle">ワーカー</div>
+
+            <div>購入済みユニット（発火まで）</div>
+            {unitRows.map((unitRow) => {
+              const intervalMs = workerDef[unitRow.id].ms;
+              const remainingMs = Math.max(0, unitRow.nextAt - now);
+              const progress = 1 - remainingMs / intervalMs;
+              return (
+                <div
+                  key={`${unitRow.id}-${unitRow.idx}`}
+                  style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6 }}
+                >
+                  <CircleTimer progress={progress} label="timer" />
+                  <div style={{ width: 140 }}>
+                    {workerDef[unitRow.id].name} #{unitRow.idx + 1}
+                  </div>
+                  <div>{Math.ceil(remainingMs / 1000)}s</div>
+                </div>
+              );
+            })}
+          </section>
+        </div>
       </div>
 
       {dexOpen && (
