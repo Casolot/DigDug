@@ -7,13 +7,15 @@ import {
   finishAnimation,
   newGame,
   selectTarget,
+  targetList,
   tickWorkers,
   workerCount,
   workerDef,
+  workerList,
   workerPrice,
   treasureIndex,
 } from "./game/state";
-import { upgradeDef, isUnlocked } from "./game/upgrades";
+import { upgradeDef, upgradeList, isUnlocked } from "./game/upgrades";
 import { CircleTimer } from "./components/CircleTimer";
 
 export default function App() {
@@ -41,8 +43,8 @@ export default function App() {
   }, [anim, g.selected]);
 
   const unitRows = useMemo(() => {
-    const rows: { id: keyof typeof workerDef; idx: number; nextAt: number }[] = [];
-    (Object.keys(workerDef) as (keyof typeof workerDef)[]).forEach((id) => {
+    const rows: { id: (typeof workerList)[number]; idx: number; nextAt: number }[] = [];
+    workerList.forEach((id) => {
       g.workerUnits[id].forEach((nextAt, idx) => rows.push({ id, idx, nextAt }));
     });
     return rows;
@@ -66,7 +68,7 @@ export default function App() {
       )}
 
       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-        {(["rock", "house", "mine"] as const).map((id) => (
+        {targetList.map((id) => (
           <button
             key={id}
             disabled={anim}
@@ -92,7 +94,7 @@ export default function App() {
 
       <div style={{ marginTop: 16 }}>
         <div>強化（図鑑 {g.discoveredOrder.length} 件）</div>
-        {(Object.keys(upgradeDef) as (keyof typeof upgradeDef)[]).map((id) => {
+        {upgradeList.map((id) => {
           const u = upgradeDef[id];
           const ok = isUnlocked(g.discoveredOrder.length, id);
           const owned = !!g.upgrades[id];
@@ -112,7 +114,7 @@ export default function App() {
       </div>
 
       <div style={{ marginTop: 16 }}>
-        {(Object.keys(workerDef) as (keyof typeof workerDef)[]).map((id) => {
+        {workerList.map((id) => {
           const price = workerPrice(g, id);
           return (
             <div key={id} style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6 }}>

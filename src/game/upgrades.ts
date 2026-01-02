@@ -1,4 +1,5 @@
-export type UpgradeId = "click_x2";
+export const upgradeList = ["click_x2"] as const;
+export type UpgradeId = typeof upgradeList[number];
 
 export const upgradeDef: Record<UpgradeId, {
   name: string; desc: string; unlockDex: number; price: number; mult: number;
