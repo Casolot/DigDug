@@ -8,6 +8,13 @@ import { upgradeDef, isUnlocked, type UpgradeId } from "./upgrades";
 export { targetList, workerList, workerDef, treasureIndex };
 export type { TargetId, WorkerId, Treasure, UpgradeId };
 
+// 数値は同じでも意味が異なるため、同一の定数にはしない。
+const HP_ROLL_MIN_MUL = 0.7;
+const HP_ROLL_MUL_RANGE = 0.6;
+
+const GOLD_ROLL_MIN_MUL = 0.7;
+const GOLD_ROLL_MUL_RANGE = 0.6;
+
 export type TargetState = "normal" | "animating";
 export type Target = { id: TargetId; maxHp: number; hp: number; state: TargetState };
 
@@ -29,7 +36,7 @@ export type GameState = {
 };
 
 export function rollHp(id: TargetId): number {
-  const r = 0.7 + Math.random() * 0.6;
+  const r = HP_ROLL_MIN_MUL + Math.random() * HP_ROLL_MUL_RANGE;
   return Math.max(1, Math.round(baseHp[id] * r));
 }
 
@@ -146,7 +153,7 @@ export function tickWorkers(g: GameState, now: number): GameState {
 }
 
 function rollGold(base: number): number {
-  const r = 0.7 + Math.random() * 0.6;
+  const r = GOLD_ROLL_MIN_MUL + Math.random() * GOLD_ROLL_MUL_RANGE;
   return Math.max(0, Math.round(base * r));
 }
 
@@ -179,7 +186,9 @@ export function finishAnimation(g: GameState, id: TargetId, now: number): GameSt
   const restored = shiftAllUnits({ ...g, animStartedAt: null }, paused);
 
   const isNew = restored.discovered[tr.id] !== true;
-  const discovered = isNew ? { ...restored.discovered, [tr.id]: true } : restored.discovered;
+  const discovered: Record<string, true> = isNew
+    ? { ...restored.discovered, [tr.id]: true as const }
+    : restored.discovered;
   const discoveredOrder = isNew ? [...restored.discoveredOrder, tr.id] : restored.discoveredOrder;
 
   return {
