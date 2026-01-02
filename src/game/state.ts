@@ -164,15 +164,11 @@ function pickTreasure(id: TargetId): Treasure {
 
 function shiftAllUnits(g: GameState, delta: number): GameState {
   if (delta <= 0) return g;
-  const w = g.workerUnits;
-  return {
-    ...g,
-    workerUnits: {
-      scavenger: w.scavenger.map((t) => t + delta),
-      caver: w.caver.map((t) => t + delta),
-      excavator: w.excavator.map((t) => t + delta),
-    },
-  };
+  const workerUnits = workerList.reduce((acc, id) => {
+    acc[id] = g.workerUnits[id].map((t) => t + delta);
+    return acc;
+  }, {} as Record<WorkerId, number[]>);
+  return { ...g, workerUnits };
 }
 
 export function finishAnimation(g: GameState, id: TargetId, now: number): GameState {
