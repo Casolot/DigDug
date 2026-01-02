@@ -83,6 +83,18 @@ button:focus-visible {
   font-size: 0.5em;
 }
 
+/* Place Critical/effective under "〇〇ダメージ！" and match suffix size */
+.damagePopup__label {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 0.15em;
+  font-size: 0.5em;
+  text-align: center;
+  white-space: nowrap;
+}
+
 .damagePopup--manual {
   font-weight: 900;
   font-size: 2.75rem;
