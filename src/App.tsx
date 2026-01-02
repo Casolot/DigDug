@@ -54,6 +54,9 @@ export default function App() {
   const treasurePopupOpen =
     !!game.lastTreasure && dismissedTreasureAt !== game.lastTreasure.at && now - game.lastTreasure.at < 4500;
 
+  const moneyFxActive = !!game.lastTreasure && now - game.lastTreasure.at < 1100;
+  const moneyShakeActive = !!game.lastTreasure && now - game.lastTreasure.at < 220;
+
   const clickMult = useMemo(() => {
     let mult = 1;
     for (const upgradeId of Object.keys(game.upgrades) as UpgradeId[]) mult *= upgradeDef[upgradeId].mult;
@@ -142,7 +145,18 @@ export default function App() {
   return (
     <div className="app">
       <header className="appHeader">
-        <div>所持金: {game.money}G</div>
+        <div className="moneyHud">
+          <span>所持金:</span>
+          <span className="moneyHud__amountWrap">
+            <span
+              key={game.lastTreasure?.at ?? 0}
+              className={moneyShakeActive ? "moneyHud__amount moneyHud__amount--shake" : "moneyHud__amount"}
+            >
+              {game.money}G
+            </span>
+            {moneyFxActive && game.lastTreasure && <span className="moneyGainPopup">+{game.lastTreasure.gold}G</span>}
+          </span>
+        </div>
         <button onClick={() => setDexOpen(true)}>図鑑</button>
       </header>
 
