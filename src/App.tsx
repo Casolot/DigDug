@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ANIMATION_MS, CLICK_BASE_DAMAGE, WORKER_TICK_MS } from "./game/config";
+import { CLICK_BASE_DAMAGE, SEARCH_MS, WORKER_TICK_MS } from "./game/config";
 import {
   buyWorker,
   buyUpgrade,
   clickDig,
-  finishAnimation,
   newGame,
   selectTarget,
   isAnimatingSelected,
+  startSearch,
   targetLabel,
   targetList,
   tickWorkers,
@@ -52,7 +52,8 @@ export default function App() {
   const lastWorkerAtRef = useRef<number | null>(null);
 
   const selectedTarget = game.targets[game.selected];
-  const animating = isAnimatingSelected(game);
+  const searching = isAnimatingSelected(game);
+  const canDig = selectedTarget.state === "ready";
   const treasurePopupOpen = !!game.lastTreasure && dismissedTreasureAt !== game.lastTreasure.at;
   const dexTreasure = dexTreasureId ? treasureIndex[dexTreasureId] : null;
 
@@ -65,11 +66,11 @@ export default function App() {
     return bonus;
   }, [game.upgrades]);
 
-  const previewDamage = animating ? 0 : Math.max(0, game.nextClickBase + clickBonus);
-  const previewClamped = Math.min(selectedTarget.hp, previewDamage);
-  const hpGreen = selectedTarget.hp - previewClamped;
-  const hpYellow = previewClamped;
-  const hpBlack = selectedTarget.maxHp - selectedTarget.hp;
+  const previewDamage = canDig && !searching ? Math.max(0, game.nextClickBase + clickBonus) : 0;
+  const previewClamped = canDig ? Math.min(selectedTarget.hp, previewDamage) : 0;
+  const hpGreen = canDig ? selectedTarget.hp - previewClamped : 0;
+  const hpYellow = canDig ? previewClamped : 0;
+  const hpBlack = canDig ? selectedTarget.maxHp - selectedTarget.hp : 0;
 
   const pct = (v: number) => (selectedTarget.maxHp <= 0 ? 0 : (v / selectedTarget.maxHp) * 100);
 
@@ -82,15 +83,6 @@ export default function App() {
     return () => clearInterval(intervalId);
   }, []);
 
-  useEffect(() => {
-    if (!animating) return;
-    const targetId = game.selected;
-    const timeoutId = setTimeout(
-      () => setGame((prevGame) => finishAnimation(prevGame, targetId, Date.now())),
-      ANIMATION_MS,
-    );
-    return () => clearTimeout(timeoutId);
-  }, [animating, game.selected]);
 
   useEffect(() => {
     const hit = game.lastManualHit;
@@ -215,7 +207,7 @@ export default function App() {
               {targetList.map((targetId) => (
                 <button
                   key={targetId}
-                  disabled={animating}
+                  disabled={searching}
                   onClick={() => setGame((prevGame) => selectTarget(prevGame, targetId))}
                   style={{ fontWeight: game.selected === targetId ? "bold" : "normal" }}
                 >
@@ -226,7 +218,7 @@ export default function App() {
 
             <div style={{ marginTop: 12, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
               <div>
-                HP: {selectedTarget.hp}/{selectedTarget.maxHp} ({selectedTarget.state})
+                HP: {canDig ? selectedTarget.hp : "???"}/{canDig ? selectedTarget.maxHp : "???"} ({selectedTarget.state})
               </div>
               <div className="hpBar" role="img" aria-label="HP bar">
                 <div className="hpBar__seg hpBar__seg--green" style={{ width: `${pct(hpGreen)}%` }} />
@@ -235,30 +227,46 @@ export default function App() {
               </div>
             </div>
 
-            <button
-              key={digShakeNonce}
-              ref={digButtonRef}
-              className={digShakeNonce > 0 ? "digButton digButton--shake" : "digButton"}
-              disabled={animating}
-              aria-label={animating ? "演出中" : "掘る"}
-              onClick={() => {
-                setDigShakeNonce((n) => n + 1);
-                setGame((prevGame) => clickDig(prevGame, Date.now()));
-              }}
-              style={{ marginTop: 12 }}
-            >
-              {animating ? (
-                <CircleTimer
-                  progress={game.animStartedAt ? (now - game.animStartedAt) / ANIMATION_MS : 0}
-                  label="演出中"
-                  size={96}
-                />
-              ) : (
+            {canDig ? (
+              <button
+                key={digShakeNonce}
+                ref={digButtonRef}
+                className={digShakeNonce > 0 ? "digButton digButton--shake" : "digButton"}
+                disabled={searching}
+                aria-label="掘る"
+                onClick={() => {
+                  setDigShakeNonce((n) => n + 1);
+                  setGame((prevGame) => clickDig(prevGame, Date.now()));
+                }}
+                style={{ marginTop: 12 }}
+              >
                 <span className="digButton__emoji" aria-hidden="true">
                   {game.selected === "rock" ? "🪨" : game.selected === "house" ? "🏠" : "⛏️"}
                 </span>
-              )}
-            </button>
+              </button>
+            ) : (
+              <button
+                ref={digButtonRef}
+                className="digButton"
+                disabled={searching}
+                aria-label={searching ? "探索中" : "探す"}
+                onClick={() => setGame((prevGame) => startSearch(prevGame, game.selected, Date.now()))}
+                style={{ marginTop: 12 }}
+              >
+                {searching ? (
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                    <CircleTimer
+                      progress={selectedTarget.searchStartedAt ? (now - selectedTarget.searchStartedAt) / SEARCH_MS : 0}
+                      label="探索中"
+                      size={96}
+                    />
+                    <div>探索中...</div>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 22, fontWeight: 700 }}>探す</div>
+                )}
+              </button>
+            )}
 
             {damagePopups.map((p) => (
               <div
@@ -290,7 +298,7 @@ export default function App() {
                       <div className="shopCard__meta">{upgrade.price}G</div>
                       <div className="shopCard__desc">{upgrade.desc}</div>
                       <button
-                        disabled={animating || game.money < upgrade.price}
+                        disabled={searching || game.money < upgrade.price}
                         onClick={() => setGame((prevGame) => buyUpgrade(prevGame, upgradeId))}
                       >
                         購入
@@ -317,7 +325,7 @@ export default function App() {
                       {workerDef[workerId].ms / 1000}sで{workerDef[workerId].dmg}
                     </div>
                     <button
-                      disabled={animating || game.money < price}
+                      disabled={searching || game.money < price}
                       onClick={() => setGame((prevGame) => buyWorker(prevGame, workerId, Date.now()))}
                     >
                       購入
