@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CLICK_BASE_DAMAGE, SEARCH_MS, WORKER_TICK_MS } from "./game/config";
+import { CLICK_BASE_DAMAGE, SEARCH_MS, TREASURE_PICKUP_INPUT_LOCK_MS, WORKER_TICK_MS } from "./game/config";
 import {
   buyWorker,
   buyUpgrade,
@@ -59,6 +59,8 @@ export default function App() {
 
   const moneyFxActive = !!game.lastTreasure && now - game.lastTreasure.at < 1100;
   const moneyShakeActive = !!game.lastTreasure && now - game.lastTreasure.at < 220;
+
+  const inputLocked = !!game.lastTreasure && now - game.lastTreasure.at < TREASURE_PICKUP_INPUT_LOCK_MS;
 
   const clickBonus = useMemo(() => {
     let bonus = 0;
@@ -152,6 +154,7 @@ export default function App() {
           </span>
         </div>
         <button
+          disabled={inputLocked}
           onClick={() => {
             setDexOpen(true);
             setDexTreasureId(null);
@@ -165,7 +168,10 @@ export default function App() {
         <div
           className="treasureModalOverlay"
           role="presentation"
-          onClick={() => setDismissedTreasureAt(game.lastTreasure!.at)}
+          onClick={() => {
+            if (inputLocked) return;
+            setDismissedTreasureAt(game.lastTreasure!.at);
+          }}
         >
           <div
             className="treasureModal"
@@ -175,7 +181,11 @@ export default function App() {
           >
             <button
               className="treasureModal__close"
-              onClick={() => setDismissedTreasureAt(game.lastTreasure!.at)}
+              disabled={inputLocked}
+              onClick={() => {
+                if (inputLocked) return;
+                setDismissedTreasureAt(game.lastTreasure!.at);
+              }}
               aria-label="Close"
             >
               ×
@@ -207,7 +217,7 @@ export default function App() {
               {targetList.map((targetId) => (
                 <button
                   key={targetId}
-                  disabled={searching}
+                  disabled={searching || inputLocked}
                   onClick={() => setGame((prevGame) => selectTarget(prevGame, targetId))}
                   style={{ fontWeight: game.selected === targetId ? "bold" : "normal" }}
                 >
@@ -232,7 +242,7 @@ export default function App() {
                 key={digShakeNonce}
                 ref={digButtonRef}
                 className={digShakeNonce > 0 ? "digButton digButton--shake" : "digButton"}
-                disabled={searching}
+                disabled={searching || inputLocked}
                 aria-label="掘る"
                 onClick={() => {
                   setDigShakeNonce((n) => n + 1);
@@ -248,7 +258,7 @@ export default function App() {
               <button
                 ref={digButtonRef}
                 className="digButton"
-                disabled={searching}
+                disabled={searching || inputLocked}
                 aria-label={searching ? "探索中" : "探す"}
                 onClick={() => setGame((prevGame) => startSearch(prevGame, game.selected, Date.now()))}
                 style={{ marginTop: 12 }}
@@ -298,7 +308,7 @@ export default function App() {
                       <div className="shopCard__meta">{upgrade.price}G</div>
                       <div className="shopCard__desc">{upgrade.desc}</div>
                       <button
-                        disabled={searching || game.money < upgrade.price}
+                        disabled={inputLocked || searching || game.money < upgrade.price}
                         onClick={() => setGame((prevGame) => buyUpgrade(prevGame, upgradeId))}
                       >
                         購入
@@ -325,7 +335,7 @@ export default function App() {
                       {workerDef[workerId].ms / 1000}sで{workerDef[workerId].dmg}
                     </div>
                     <button
-                      disabled={searching || game.money < price}
+                      disabled={inputLocked || searching || game.money < price}
                       onClick={() => setGame((prevGame) => buyWorker(prevGame, workerId, Date.now()))}
                     >
                       購入
@@ -369,6 +379,7 @@ export default function App() {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>図鑑</div>
               <button
+                disabled={inputLocked}
                 onClick={() => {
                   setDexOpen(false);
                   setDexTreasureId(null);
@@ -393,7 +404,7 @@ export default function App() {
                         <button
                           key={t.id}
                           type="button"
-                          disabled={!isFound}
+                          disabled={inputLocked || !isFound}
                           onClick={() => setDexTreasureId(t.id)}
                           style={{
                             display: "flex",
@@ -422,9 +433,24 @@ export default function App() {
       )}
 
       {dexTreasure && (
-        <div className="treasureModalOverlay" role="presentation" onClick={() => setDexTreasureId(null)}>
+        <div
+          className="treasureModalOverlay"
+          role="presentation"
+          onClick={() => {
+            if (inputLocked) return;
+            setDexTreasureId(null);
+          }}
+        >
           <div className="treasureModal" role="dialog" aria-label="Treasure details" onClick={(e) => e.stopPropagation()}>
-            <button className="treasureModal__close" onClick={() => setDexTreasureId(null)} aria-label="Close">
+            <button
+              className="treasureModal__close"
+              disabled={inputLocked}
+              onClick={() => {
+                if (inputLocked) return;
+                setDexTreasureId(null);
+              }}
+              aria-label="Close"
+            >
               ×
             </button>
 

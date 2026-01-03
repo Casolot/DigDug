@@ -4,6 +4,9 @@ export const PRICE_MULT = 1.2;
 
 export const WORKER_TICK_MS = 100;
 
+// お宝入手直後の「入力受付停止」時間（レベル調整用）
+export const TREASURE_PICKUP_INPUT_LOCK_MS = 800;
+
 export const CLICK_BASE_DAMAGE = 1;
 
 export const CLICK_DAMAGE_TIERS = [
