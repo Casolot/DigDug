@@ -16,7 +16,15 @@ const GOLD_ROLL_MIN_MUL = 0.7;
 const GOLD_ROLL_MUL_RANGE = 0.6;
 
 export type TargetState = "unsearched" | "searching" | "ready";
-export type Target = { id: TargetId; maxHp: number; hp: number; state: TargetState; searchStartedAt: number | null };
+export type Target = {
+  id: TargetId;
+  maxHp: number;
+  hp: number;
+  state: TargetState;
+  searchStartedAt: number | null;
+  // その対象が直前に受けた「プレイヤー(クリック)」からのダメージ量
+  lastPlayerDamage: number;
+};
 
 export type GameState = {
   money: number;
@@ -47,7 +55,7 @@ export function rollHp(id: TargetId): number {
 }
 
 export function newTarget(id: TargetId): Target {
-  return { id, maxHp: 0, hp: 0, state: "unsearched", searchStartedAt: null };
+  return { id, maxHp: 0, hp: 0, state: "unsearched", searchStartedAt: null, lastPlayerDamage: 0 };
 }
 
 export function newGame(): GameState {
@@ -147,13 +155,35 @@ export function clickDig(game: GameState, now: number): GameState {
   const dmg = Math.max(0, base + clickBonus(game));
   const nextClickBase = rollClickDamageBase();
 
-  // 0ダメージも演出として記録する（HPは減らさない）
-  if (dmg <= 0)
-    return { ...game, nextClickBase, lastClickDamage: 0, lastManualHit: { dmg: 0, at: now, mult: 0 } };
+  const target = game.targets[game.selected];
+  const applied = target.state === "ready" && target.hp > 0 ? Math.min(target.hp, dmg) : 0;
 
-  const nextState = applyDamageToSelected(game, dmg, now);
+  // 0ダメージも演出として記録する（HPは減らさない）
+  if (dmg <= 0) {
+    const t = game.targets[game.selected];
+    return {
+      ...game,
+      nextClickBase,
+      lastClickDamage: 0,
+      lastManualHit: { dmg: 0, at: now, mult: 0 },
+      targets:
+        t.state === "ready"
+          ? { ...game.targets, [t.id]: { ...t, lastPlayerDamage: 0 } }
+          : game.targets,
+    };
+  }
+
+  const afterDamage = applyDamageToSelected(game, dmg, now);
+
+  // 「その対象が直前に受けたプレイヤーからのダメージ分」を保持する
+  const t2 = afterDamage.targets[game.selected];
+  const withLast =
+    t2.state === "ready"
+      ? { ...afterDamage, targets: { ...afterDamage.targets, [t2.id]: { ...t2, lastPlayerDamage: applied } } }
+      : afterDamage;
+
   return {
-    ...nextState,
+    ...withLast,
     nextClickBase,
     lastClickDamage: dmg,
     lastManualHit: { dmg, at: now, mult: dmg / CLICK_BASE_DAMAGE },
@@ -194,7 +224,7 @@ export function tickWorkers(game: GameState, now: number): GameState {
       ...nextState,
       targets: {
         ...nextState.targets,
-        [targetId]: { ...t, state: "ready", searchStartedAt: null, maxHp, hp: maxHp },
+        [targetId]: { ...t, state: "ready", searchStartedAt: null, maxHp, hp: maxHp, lastPlayerDamage: 0 },
       },
     };
   }

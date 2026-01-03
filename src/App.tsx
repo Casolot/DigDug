@@ -68,11 +68,9 @@ export default function App() {
     return bonus;
   }, [game.upgrades]);
 
-  const previewDamage = canDig && !searching ? Math.max(0, game.nextClickBase + clickBonus) : 0;
-  const previewClamped = canDig ? Math.min(selectedTarget.hp, previewDamage) : 0;
-  const hpGreen = canDig ? selectedTarget.hp - previewClamped : 0;
-  const hpYellow = canDig ? previewClamped : 0;
-  const hpBlack = canDig ? selectedTarget.maxHp - selectedTarget.hp : 0;
+  const hpGreen = canDig ? selectedTarget.hp : 0;
+  const hpYellow = canDig ? Math.min(selectedTarget.lastPlayerDamage ?? 0, selectedTarget.maxHp - selectedTarget.hp) : 0;
+  const hpBlack = canDig ? Math.max(0, selectedTarget.maxHp - selectedTarget.hp - hpYellow) : 0;
 
   const pct = (v: number) => (selectedTarget.maxHp <= 0 ? 0 : (v / selectedTarget.maxHp) * 100);
 
