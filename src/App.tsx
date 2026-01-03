@@ -266,9 +266,9 @@ export default function App() {
                 className={`damagePopup damagePopup--${p.kind} damagePopup--${p.tone}`}
                 style={{ left: p.x, top: p.y, "--dmg-scale": p.scale } as React.CSSProperties}
               >
-                {p.label && <span className="damagePopup__label">{p.label}</span>}
                 <span className="damagePopup__num">{p.dmg}</span>
                 <span className="damagePopup__suffix">ダメージ！</span>
+                {p.label && <span className="damagePopup__label">{p.label}</span>}
               </div>
             ))}
           </section>
