@@ -33,6 +33,10 @@ export type GameState = {
 
   workerUnits: Record<WorkerId, number[]>;
 
+  // お宝入手後〜探索完了まで、ワーカーのクールダウンを停止するための情報
+  workerPauseTargetId: TargetId | null;
+  workerPausedAt: number | null;
+
   lastTreasure?: { id: string; name: string; desc: string; gold: number; isNew: boolean; at: number };
   lastClickDamage?: number;
 
@@ -64,6 +68,8 @@ export function newGame(): GameState {
     selected: "rock",
     targets: { rock: newTarget("rock"), house: newTarget("house"), mine: newTarget("mine") },
     workerUnits: { scavenger: [], caver: [], excavator: [] },
+    workerPauseTargetId: null,
+    workerPausedAt: null,
     nextClickBase: rollClickDamageBase(),
     discovered: {},
     discoveredOrder: [],
@@ -122,6 +128,8 @@ function applyDamageToSelected(game: GameState, dmg: number, now: number): GameS
     ...nextState,
     money: nextState.money + gold,
     lastTreasure: { id: treasure.id, name: treasure.name, desc: treasure.desc, gold, isNew, at: now },
+    workerPauseTargetId: target.id,
+    workerPausedAt: now,
     discovered,
     discoveredOrder,
     targets: {
@@ -214,6 +222,10 @@ export function buyWorker(game: GameState, id: WorkerId, now: number): GameState
 export function tickWorkers(game: GameState, now: number): GameState {
   let nextState = game;
 
+  const pauseTargetId = nextState.workerPauseTargetId;
+  const pauseActiveAtStart =
+    pauseTargetId !== null && nextState.targets[pauseTargetId].state !== "ready";
+
   // 探索中の対象があれば、一定時間後にHPを確定させる。
   for (const targetId of targetList) {
     const t = nextState.targets[targetId];
@@ -227,6 +239,31 @@ export function tickWorkers(game: GameState, now: number): GameState {
         [targetId]: { ...t, state: "ready", searchStartedAt: null, maxHp, hp: maxHp, lastPlayerDamage: 0 },
       },
     };
+  }
+
+  // お宝入手〜探索完了までは、ワーカーのクールダウンを停止する。
+  if (pauseActiveAtStart) {
+    const delta = now - (nextState.workerPausedAt ?? now);
+    if (delta > 0) {
+      let anyChanged = false;
+      const workerUnits = { ...nextState.workerUnits };
+      for (const workerId of workerList) {
+        const units = workerUnits[workerId];
+        if (units.length === 0) continue;
+        workerUnits[workerId] = units.map((t) => t + delta);
+        anyChanged = true;
+      }
+      if (anyChanged) nextState = { ...nextState, workerUnits };
+    }
+    nextState = { ...nextState, workerPausedAt: now };
+  }
+
+  if (pauseTargetId !== null && nextState.targets[pauseTargetId].state === "ready") {
+    nextState = { ...nextState, workerPauseTargetId: null, workerPausedAt: null };
+  }
+
+  if (nextState.workerPauseTargetId !== null && nextState.targets[nextState.workerPauseTargetId].state !== "ready") {
+    return nextState;
   }
 
   for (const workerId of workerList) {
