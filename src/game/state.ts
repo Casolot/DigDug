@@ -222,10 +222,6 @@ export function buyWorker(game: GameState, id: WorkerId, now: number): GameState
 export function tickWorkers(game: GameState, now: number): GameState {
   let nextState = game;
 
-  const pauseTargetId = nextState.workerPauseTargetId;
-  const pauseActiveAtStart =
-    pauseTargetId !== null && nextState.targets[pauseTargetId].state !== "ready";
-
   // 探索中の対象があれば、一定時間後にHPを確定させる。
   for (const targetId of targetList) {
     const t = nextState.targets[targetId];
@@ -241,8 +237,16 @@ export function tickWorkers(game: GameState, now: number): GameState {
     };
   }
 
-  // お宝入手〜探索完了までは、ワーカーのクールダウンを停止する。
-  if (pauseActiveAtStart) {
+  const pauseTargetId = nextState.workerPauseTargetId;
+  // ワーカーのクールダウン停止は「現在選択中の対象が掘れない(=探す/探索中)」ときのみ。
+  // お宝獲得後に対象が未探索へ戻っても、別の「掘れる」対象へ切り替えたら再開する。
+  const pauseByTreasure =
+    pauseTargetId !== null && nextState.selected === pauseTargetId && nextState.targets[pauseTargetId].state !== "ready";
+  const pauseBySelected = nextState.targets[nextState.selected].state !== "ready";
+  const pauseActive = pauseByTreasure || pauseBySelected;
+
+  // 「掘れない」状態の間は、ワーカーのクールダウンを停止する。
+  if (pauseActive) {
     const delta = now - (nextState.workerPausedAt ?? now);
     if (delta > 0) {
       let anyChanged = false;
@@ -259,11 +263,19 @@ export function tickWorkers(game: GameState, now: number): GameState {
   }
 
   if (pauseTargetId !== null && nextState.targets[pauseTargetId].state === "ready") {
-    nextState = { ...nextState, workerPauseTargetId: null, workerPausedAt: null };
+    nextState = { ...nextState, workerPauseTargetId: null };
   }
 
-  if (nextState.workerPauseTargetId !== null && nextState.targets[nextState.workerPauseTargetId].state !== "ready") {
-    return nextState;
+  const pauseStillActive =
+    (nextState.workerPauseTargetId !== null &&
+      nextState.selected === nextState.workerPauseTargetId &&
+      nextState.targets[nextState.workerPauseTargetId].state !== "ready") ||
+    nextState.targets[nextState.selected].state !== "ready";
+
+  if (pauseStillActive) return nextState;
+
+  if (nextState.workerPauseTargetId === null && nextState.workerPausedAt !== null) {
+    nextState = { ...nextState, workerPausedAt: null };
   }
 
   for (const workerId of workerList) {
