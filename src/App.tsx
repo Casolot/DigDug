@@ -6,7 +6,7 @@ import {
   clickDig,
   newGame,
   selectTarget,
-  isAnimatingSelected,
+  isSearchingSelected,
   startSearch,
   targetLabel,
   targetList,
@@ -52,7 +52,7 @@ export default function App() {
   const lastWorkerAtRef = useRef<number | null>(null);
 
   const selectedTarget = game.targets[game.selected];
-  const searching = isAnimatingSelected(game);
+  const searching = isSearchingSelected(game);
   const canDig = selectedTarget.state === "ready";
   const treasurePopupOpen = !!game.lastTreasure && dismissedTreasureAt !== game.lastTreasure.at;
   const dexTreasure = dexTreasureId ? treasureIndex[dexTreasureId] : null;

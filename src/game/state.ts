@@ -71,12 +71,12 @@ export function newGame(): GameState {
   };
 }
 
-export function isAnimatingSelected(game: GameState): boolean {
+export function isSearchingSelected(game: GameState): boolean {
   return game.targets[game.selected].state === "searching";
 }
 
 export function selectTarget(game: GameState, id: TargetId): GameState {
-  if (isAnimatingSelected(game)) return game;
+  if (isSearchingSelected(game)) return game;
   return { ...game, selected: id };
 }
 
@@ -200,7 +200,7 @@ export function workerPrice(game: GameState, id: WorkerId): number {
 }
 
 export function buyWorker(game: GameState, id: WorkerId, now: number): GameState {
-  if (isAnimatingSelected(game)) return game;
+  if (isSearchingSelected(game)) return game;
   const price = workerPrice(game, id);
   if (game.money < price) return game;
   const unitNext = now + workerDef[id].ms;
@@ -270,7 +270,7 @@ function pickTreasure(id: TargetId): Treasure {
 
 
 export function buyUpgrade(game: GameState, id: UpgradeId): GameState {
-  if (isAnimatingSelected(game)) return game;
+  if (isSearchingSelected(game)) return game;
   const dex = game.discoveredOrder.length;
   if (!isUnlocked(dex, id) || game.upgrades[id]) return game;
   const price = upgradeDef[id].price;

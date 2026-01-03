@@ -1,3 +1,4 @@
+// 探索に必要な時間（ミリ秒）
 export const SEARCH_MS = 3000;
 
 export const PRICE_MULT = 1.2;
