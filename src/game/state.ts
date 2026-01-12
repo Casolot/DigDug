@@ -1,5 +1,5 @@
 // src/game/state.ts
-import { CLICK_BASE_DAMAGE, CLICK_DAMAGE_TIERS, PRICE_MULT } from "./config";
+import { CLICK_BASE_DAMAGE, CLICK_DAMAGE_TIERS, PRICE_MULT, SEARCH_MS } from "./config";
 import { baseHp, targetLabel, targetList, type TargetId } from "./data/targets";
 import { treasures, treasureIndex, type Treasure } from "./data/treasures";
 import { workerDef, workerList, type WorkerId } from "./data/workers";
@@ -15,8 +15,16 @@ const HP_ROLL_MUL_RANGE = 0.6;
 const GOLD_ROLL_MIN_MUL = 0.7;
 const GOLD_ROLL_MUL_RANGE = 0.6;
 
-export type TargetState = "normal" | "animating";
-export type Target = { id: TargetId; maxHp: number; hp: number; state: TargetState };
+export type TargetState = "unsearched" | "searching" | "ready";
+export type Target = {
+  id: TargetId;
+  maxHp: number;
+  hp: number;
+  state: TargetState;
+  searchStartedAt: number | null;
+  // その対象が直前に受けた「プレイヤー(クリック)」からのダメージ量
+  lastPlayerDamage: number;
+};
 
 export type GameState = {
   money: number;
@@ -24,7 +32,10 @@ export type GameState = {
   targets: Record<TargetId, Target>;
 
   workerUnits: Record<WorkerId, number[]>;
-  animStartedAt: number | null;
+
+  // お宝入手後〜探索完了まで、ワーカーのクールダウンを停止するための情報
+  workerPauseTargetId: TargetId | null;
+  workerPausedAt: number | null;
 
   lastTreasure?: { id: string; name: string; desc: string; gold: number; isNew: boolean; at: number };
   lastClickDamage?: number;
@@ -48,8 +59,7 @@ export function rollHp(id: TargetId): number {
 }
 
 export function newTarget(id: TargetId): Target {
-  const maxHp = rollHp(id);
-  return { id, maxHp, hp: maxHp, state: "normal" };
+  return { id, maxHp: 0, hp: 0, state: "unsearched", searchStartedAt: null, lastPlayerDamage: 0 };
 }
 
 export function newGame(): GameState {
@@ -58,7 +68,8 @@ export function newGame(): GameState {
     selected: "rock",
     targets: { rock: newTarget("rock"), house: newTarget("house"), mine: newTarget("mine") },
     workerUnits: { scavenger: [], caver: [], excavator: [] },
-    animStartedAt: null,
+    workerPauseTargetId: null,
+    workerPausedAt: null,
     nextClickBase: rollClickDamageBase(),
     discovered: {},
     discoveredOrder: [],
@@ -66,33 +77,43 @@ export function newGame(): GameState {
   };
 }
 
-export function isAnimatingSelected(game: GameState): boolean {
-  return game.targets[game.selected].state !== "normal";
+export function isSearchingSelected(game: GameState): boolean {
+  return game.targets[game.selected].state === "searching";
 }
 
 export function selectTarget(game: GameState, id: TargetId): GameState {
-  if (isAnimatingSelected(game)) return game;
+  if (isSearchingSelected(game)) return game;
   return { ...game, selected: id };
+}
+
+export function startSearch(game: GameState, id: TargetId, now: number): GameState {
+  const target = game.targets[id];
+  if (target.state !== "unsearched") return game;
+  return {
+    ...game,
+    targets: {
+      ...game.targets,
+      [id]: { ...target, state: "searching", searchStartedAt: now },
+    },
+  };
 }
 
 function applyDamageToSelected(game: GameState, dmg: number, now: number): GameState {
   const target = game.targets[game.selected];
-  if (target.state !== "normal" || target.hp <= 0 || dmg <= 0) return game;
+  if (target.state !== "ready" || target.hp <= 0 || dmg <= 0) return game;
 
   const nextHp = Math.max(0, target.hp - dmg);
-  const isAnimating = nextHp === 0;
 
   const nextState: GameState = {
     ...game,
-    animStartedAt: isAnimating ? now : game.animStartedAt,
     targets: {
       ...game.targets,
-      [target.id]: { ...target, hp: nextHp, state: isAnimating ? "animating" : "normal" },
+      [target.id]: { ...target, hp: nextHp },
     },
   };
 
   // お宝獲得のタイミングを「HPが0になった瞬間」に合わせる。
-  if (!isAnimating) return nextState;
+  if (nextHp > 0) return nextState;
 
   const treasure = pickTreasure(target.id);
   const gold = rollGold(treasure.base);
@@ -107,8 +128,14 @@ function applyDamageToSelected(game: GameState, dmg: number, now: number): GameS
     ...nextState,
     money: nextState.money + gold,
     lastTreasure: { id: treasure.id, name: treasure.name, desc: treasure.desc, gold, isNew, at: now },
+    workerPauseTargetId: target.id,
+    workerPausedAt: now,
     discovered,
     discoveredOrder,
+    targets: {
+      ...nextState.targets,
+      [target.id]: newTarget(target.id),
+    },
   };
 }
 
@@ -136,13 +163,35 @@ export function clickDig(game: GameState, now: number): GameState {
   const dmg = Math.max(0, base + clickBonus(game));
   const nextClickBase = rollClickDamageBase();
 
-  // 0ダメージも演出として記録する（HPは減らさない）
-  if (dmg <= 0)
-    return { ...game, nextClickBase, lastClickDamage: 0, lastManualHit: { dmg: 0, at: now, mult: 0 } };
+  const target = game.targets[game.selected];
+  const applied = target.state === "ready" && target.hp > 0 ? Math.min(target.hp, dmg) : 0;
 
-  const nextState = applyDamageToSelected(game, dmg, now);
+  // 0ダメージも演出として記録する（HPは減らさない）
+  if (dmg <= 0) {
+    const t = game.targets[game.selected];
+    return {
+      ...game,
+      nextClickBase,
+      lastClickDamage: 0,
+      lastManualHit: { dmg: 0, at: now, mult: 0 },
+      targets:
+        t.state === "ready"
+          ? { ...game.targets, [t.id]: { ...t, lastPlayerDamage: 0 } }
+          : game.targets,
+    };
+  }
+
+  const afterDamage = applyDamageToSelected(game, dmg, now);
+
+  // 「その対象が直前に受けたプレイヤーからのダメージ分」を保持する
+  const t2 = afterDamage.targets[game.selected];
+  const withLast =
+    t2.state === "ready"
+      ? { ...afterDamage, targets: { ...afterDamage.targets, [t2.id]: { ...t2, lastPlayerDamage: applied } } }
+      : afterDamage;
+
   return {
-    ...nextState,
+    ...withLast,
     nextClickBase,
     lastClickDamage: dmg,
     lastManualHit: { dmg, at: now, mult: dmg / CLICK_BASE_DAMAGE },
@@ -159,7 +208,7 @@ export function workerPrice(game: GameState, id: WorkerId): number {
 }
 
 export function buyWorker(game: GameState, id: WorkerId, now: number): GameState {
-  if (isAnimatingSelected(game)) return game;
+  if (isSearchingSelected(game)) return game;
   const price = workerPrice(game, id);
   if (game.money < price) return game;
   const unitNext = now + workerDef[id].ms;
@@ -171,8 +220,63 @@ export function buyWorker(game: GameState, id: WorkerId, now: number): GameState
 }
 
 export function tickWorkers(game: GameState, now: number): GameState {
-  if (isAnimatingSelected(game)) return game;
   let nextState = game;
+
+  // 探索中の対象があれば、一定時間後にHPを確定させる。
+  for (const targetId of targetList) {
+    const t = nextState.targets[targetId];
+    if (t.state !== "searching" || t.searchStartedAt === null) continue;
+    if (now - t.searchStartedAt < SEARCH_MS) continue;
+    const maxHp = rollHp(targetId);
+    nextState = {
+      ...nextState,
+      targets: {
+        ...nextState.targets,
+        [targetId]: { ...t, state: "ready", searchStartedAt: null, maxHp, hp: maxHp, lastPlayerDamage: 0 },
+      },
+    };
+  }
+
+  const pauseTargetId = nextState.workerPauseTargetId;
+  // ワーカーのクールダウン停止は「現在選択中の対象が掘れない(=探す/探索中)」ときのみ。
+  // お宝獲得後に対象が未探索へ戻っても、別の「掘れる」対象へ切り替えたら再開する。
+  const pauseByTreasure =
+    pauseTargetId !== null && nextState.selected === pauseTargetId && nextState.targets[pauseTargetId].state !== "ready";
+  const pauseBySelected = nextState.targets[nextState.selected].state !== "ready";
+  const pauseActive = pauseByTreasure || pauseBySelected;
+
+  // 「掘れない」状態の間は、ワーカーのクールダウンを停止する。
+  if (pauseActive) {
+    const delta = now - (nextState.workerPausedAt ?? now);
+    if (delta > 0) {
+      let anyChanged = false;
+      const workerUnits = { ...nextState.workerUnits };
+      for (const workerId of workerList) {
+        const units = workerUnits[workerId];
+        if (units.length === 0) continue;
+        workerUnits[workerId] = units.map((t) => t + delta);
+        anyChanged = true;
+      }
+      if (anyChanged) nextState = { ...nextState, workerUnits };
+    }
+    nextState = { ...nextState, workerPausedAt: now };
+  }
+
+  if (pauseTargetId !== null && nextState.targets[pauseTargetId].state === "ready") {
+    nextState = { ...nextState, workerPauseTargetId: null };
+  }
+
+  const pauseStillActive =
+    (nextState.workerPauseTargetId !== null &&
+      nextState.selected === nextState.workerPauseTargetId &&
+      nextState.targets[nextState.workerPauseTargetId].state !== "ready") ||
+    nextState.targets[nextState.selected].state !== "ready";
+
+  if (pauseStillActive) return nextState;
+
+  if (nextState.workerPauseTargetId === null && nextState.workerPausedAt !== null) {
+    nextState = { ...nextState, workerPausedAt: null };
+  }
 
   for (const workerId of workerList) {
     const units = nextState.workerUnits[workerId];
@@ -198,7 +302,6 @@ export function tickWorkers(game: GameState, now: number): GameState {
       if (afterDamage !== nextState) nextState = { ...afterDamage, lastWorkerHit: { dmg: typeDamage, at: now } };
       else nextState = afterDamage;
     }
-    if (isAnimatingSelected(nextState)) break;
   }
 
   return nextState;
@@ -214,30 +317,9 @@ function pickTreasure(id: TargetId): Treasure {
   return list[Math.floor(Math.random() * list.length)];
 }
 
-function shiftAllUnits(game: GameState, delta: number): GameState {
-  if (delta <= 0) return game;
-  const workerUnits = workerList.reduce((acc, workerId) => {
-    acc[workerId] = game.workerUnits[workerId].map((nextAt) => nextAt + delta);
-    return acc;
-  }, {} as Record<WorkerId, number[]>);
-  return { ...game, workerUnits };
-}
-
-export function finishAnimation(game: GameState, id: TargetId, now: number): GameState {
-  const target = game.targets[id];
-  if (target.state !== "animating") return game;
-
-  const paused = game.animStartedAt === null ? 0 : Math.max(0, now - game.animStartedAt);
-  const restored = shiftAllUnits({ ...game, animStartedAt: null }, paused);
-
-  return {
-    ...restored,
-    targets: { ...restored.targets, [id]: newTarget(id) },
-  };
-}
 
 export function buyUpgrade(game: GameState, id: UpgradeId): GameState {
-  if (isAnimatingSelected(game)) return game;
+  if (isSearchingSelected(game)) return game;
   const dex = game.discoveredOrder.length;
   if (!isUnlocked(dex, id) || game.upgrades[id]) return game;
   const price = upgradeDef[id].price;

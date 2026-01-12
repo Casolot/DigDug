@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ANIMATION_MS, CLICK_BASE_DAMAGE, WORKER_TICK_MS } from "./game/config";
+import { CLICK_BASE_DAMAGE, SEARCH_MS, TREASURE_PICKUP_INPUT_LOCK_MS, WORKER_TICK_MS } from "./game/config";
 import {
   buyWorker,
   buyUpgrade,
   clickDig,
-  finishAnimation,
   newGame,
   selectTarget,
-  isAnimatingSelected,
+  isSearchingSelected,
+  startSearch,
   targetLabel,
   targetList,
   tickWorkers,
@@ -52,12 +52,15 @@ export default function App() {
   const lastWorkerAtRef = useRef<number | null>(null);
 
   const selectedTarget = game.targets[game.selected];
-  const animating = isAnimatingSelected(game);
+  const searching = isSearchingSelected(game);
+  const canDig = selectedTarget.state === "ready";
   const treasurePopupOpen = !!game.lastTreasure && dismissedTreasureAt !== game.lastTreasure.at;
   const dexTreasure = dexTreasureId ? treasureIndex[dexTreasureId] : null;
 
   const moneyFxActive = !!game.lastTreasure && now - game.lastTreasure.at < 1100;
   const moneyShakeActive = !!game.lastTreasure && now - game.lastTreasure.at < 220;
+
+  const inputLocked = !!game.lastTreasure && now - game.lastTreasure.at < TREASURE_PICKUP_INPUT_LOCK_MS;
 
   const clickBonus = useMemo(() => {
     let bonus = 0;
@@ -65,11 +68,9 @@ export default function App() {
     return bonus;
   }, [game.upgrades]);
 
-  const previewDamage = animating ? 0 : Math.max(0, game.nextClickBase + clickBonus);
-  const previewClamped = Math.min(selectedTarget.hp, previewDamage);
-  const hpGreen = selectedTarget.hp - previewClamped;
-  const hpYellow = previewClamped;
-  const hpBlack = selectedTarget.maxHp - selectedTarget.hp;
+  const hpGreen = canDig ? selectedTarget.hp : 0;
+  const hpYellow = canDig ? Math.min(selectedTarget.lastPlayerDamage ?? 0, selectedTarget.maxHp - selectedTarget.hp) : 0;
+  const hpBlack = canDig ? Math.max(0, selectedTarget.maxHp - selectedTarget.hp - hpYellow) : 0;
 
   const pct = (v: number) => (selectedTarget.maxHp <= 0 ? 0 : (v / selectedTarget.maxHp) * 100);
 
@@ -82,15 +83,6 @@ export default function App() {
     return () => clearInterval(intervalId);
   }, []);
 
-  useEffect(() => {
-    if (!animating) return;
-    const targetId = game.selected;
-    const timeoutId = setTimeout(
-      () => setGame((prevGame) => finishAnimation(prevGame, targetId, Date.now())),
-      ANIMATION_MS,
-    );
-    return () => clearTimeout(timeoutId);
-  }, [animating, game.selected]);
 
   useEffect(() => {
     const hit = game.lastManualHit;
@@ -160,6 +152,7 @@ export default function App() {
           </span>
         </div>
         <button
+          disabled={inputLocked}
           onClick={() => {
             setDexOpen(true);
             setDexTreasureId(null);
@@ -173,7 +166,10 @@ export default function App() {
         <div
           className="treasureModalOverlay"
           role="presentation"
-          onClick={() => setDismissedTreasureAt(game.lastTreasure!.at)}
+          onClick={() => {
+            if (inputLocked) return;
+            setDismissedTreasureAt(game.lastTreasure!.at);
+          }}
         >
           <div
             className="treasureModal"
@@ -183,7 +179,11 @@ export default function App() {
           >
             <button
               className="treasureModal__close"
-              onClick={() => setDismissedTreasureAt(game.lastTreasure!.at)}
+              disabled={inputLocked}
+              onClick={() => {
+                if (inputLocked) return;
+                setDismissedTreasureAt(game.lastTreasure!.at);
+              }}
               aria-label="Close"
             >
               ×
@@ -215,7 +215,7 @@ export default function App() {
               {targetList.map((targetId) => (
                 <button
                   key={targetId}
-                  disabled={animating}
+                  disabled={searching || inputLocked}
                   onClick={() => setGame((prevGame) => selectTarget(prevGame, targetId))}
                   style={{ fontWeight: game.selected === targetId ? "bold" : "normal" }}
                 >
@@ -226,7 +226,7 @@ export default function App() {
 
             <div style={{ marginTop: 12, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
               <div>
-                HP: {selectedTarget.hp}/{selectedTarget.maxHp} ({selectedTarget.state})
+                HP: {canDig ? selectedTarget.hp : "???"}/{canDig ? selectedTarget.maxHp : "???"} ({selectedTarget.state})
               </div>
               <div className="hpBar" role="img" aria-label="HP bar">
                 <div className="hpBar__seg hpBar__seg--green" style={{ width: `${pct(hpGreen)}%` }} />
@@ -235,30 +235,46 @@ export default function App() {
               </div>
             </div>
 
-            <button
-              key={digShakeNonce}
-              ref={digButtonRef}
-              className={digShakeNonce > 0 ? "digButton digButton--shake" : "digButton"}
-              disabled={animating}
-              aria-label={animating ? "演出中" : "掘る"}
-              onClick={() => {
-                setDigShakeNonce((n) => n + 1);
-                setGame((prevGame) => clickDig(prevGame, Date.now()));
-              }}
-              style={{ marginTop: 12 }}
-            >
-              {animating ? (
-                <CircleTimer
-                  progress={game.animStartedAt ? (now - game.animStartedAt) / ANIMATION_MS : 0}
-                  label="演出中"
-                  size={96}
-                />
-              ) : (
+            {canDig ? (
+              <button
+                key={digShakeNonce}
+                ref={digButtonRef}
+                className={digShakeNonce > 0 ? "digButton digButton--shake" : "digButton"}
+                disabled={searching || inputLocked}
+                aria-label="掘る"
+                onClick={() => {
+                  setDigShakeNonce((n) => n + 1);
+                  setGame((prevGame) => clickDig(prevGame, Date.now()));
+                }}
+                style={{ marginTop: 12 }}
+              >
                 <span className="digButton__emoji" aria-hidden="true">
                   {game.selected === "rock" ? "🪨" : game.selected === "house" ? "🏠" : "⛏️"}
                 </span>
-              )}
-            </button>
+              </button>
+            ) : (
+              <button
+                ref={digButtonRef}
+                className="digButton"
+                disabled={searching || inputLocked}
+                aria-label={searching ? "探索中" : "探す"}
+                onClick={() => setGame((prevGame) => startSearch(prevGame, game.selected, Date.now()))}
+                style={{ marginTop: 12 }}
+              >
+                {searching ? (
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                    <CircleTimer
+                      progress={selectedTarget.searchStartedAt ? (now - selectedTarget.searchStartedAt) / SEARCH_MS : 0}
+                      label="探索中"
+                      size={96}
+                    />
+                    <div>探索中...</div>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 22, fontWeight: 700 }}>探す</div>
+                )}
+              </button>
+            )}
 
             {damagePopups.map((p) => (
               <div
@@ -290,7 +306,7 @@ export default function App() {
                       <div className="shopCard__meta">{upgrade.price}G</div>
                       <div className="shopCard__desc">{upgrade.desc}</div>
                       <button
-                        disabled={animating || game.money < upgrade.price}
+                        disabled={inputLocked || searching || game.money < upgrade.price}
                         onClick={() => setGame((prevGame) => buyUpgrade(prevGame, upgradeId))}
                       >
                         購入
@@ -317,7 +333,7 @@ export default function App() {
                       {workerDef[workerId].ms / 1000}sで{workerDef[workerId].dmg}
                     </div>
                     <button
-                      disabled={animating || game.money < price}
+                      disabled={inputLocked || searching || game.money < price}
                       onClick={() => setGame((prevGame) => buyWorker(prevGame, workerId, Date.now()))}
                     >
                       購入
@@ -361,6 +377,7 @@ export default function App() {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>図鑑</div>
               <button
+                disabled={inputLocked}
                 onClick={() => {
                   setDexOpen(false);
                   setDexTreasureId(null);
@@ -385,7 +402,7 @@ export default function App() {
                         <button
                           key={t.id}
                           type="button"
-                          disabled={!isFound}
+                          disabled={inputLocked || !isFound}
                           onClick={() => setDexTreasureId(t.id)}
                           style={{
                             display: "flex",
@@ -414,9 +431,24 @@ export default function App() {
       )}
 
       {dexTreasure && (
-        <div className="treasureModalOverlay" role="presentation" onClick={() => setDexTreasureId(null)}>
+        <div
+          className="treasureModalOverlay"
+          role="presentation"
+          onClick={() => {
+            if (inputLocked) return;
+            setDexTreasureId(null);
+          }}
+        >
           <div className="treasureModal" role="dialog" aria-label="Treasure details" onClick={(e) => e.stopPropagation()}>
-            <button className="treasureModal__close" onClick={() => setDexTreasureId(null)} aria-label="Close">
+            <button
+              className="treasureModal__close"
+              disabled={inputLocked}
+              onClick={() => {
+                if (inputLocked) return;
+                setDexTreasureId(null);
+              }}
+              aria-label="Close"
+            >
               ×
             </button>
 
